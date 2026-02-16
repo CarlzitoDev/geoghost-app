@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { RotateCcw, Map, Route, Bookmark, Hash } from "lucide-react";
+import { RotateCcw, Map, Route, Bookmark, Hash, Footprints, Bike, Car } from "lucide-react";
 import { useSettings, TRANSPORT_SPEEDS, type AppSettings, type TransportMode } from "@/hooks/use-settings";
 
 interface SettingsPanelProps {
@@ -93,8 +93,9 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               <Label className="text-xs text-muted-foreground">Transport mode</Label>
               <div className="grid grid-cols-3 gap-1.5">
                 {(Object.keys(TRANSPORT_SPEEDS) as TransportMode[]).map((mode) => {
-                  const { label, emoji, speed } = TRANSPORT_SPEEDS[mode];
+                  const { label, icon, speed } = TRANSPORT_SPEEDS[mode];
                   const active = settings.transportMode === mode;
+                  const IconComp = mode === "walk" ? Footprints : mode === "bike" ? Bike : Car;
                   return (
                     <button
                       key={mode}
@@ -105,7 +106,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                           : "bg-secondary/40 border border-border/40 text-muted-foreground hover:bg-secondary/60"
                       }`}
                     >
-                      <span className="text-lg">{emoji}</span>
+                      <IconComp className="h-4 w-4" />
                       <span className="text-[10px] font-medium">{label}</span>
                       <span className="text-[9px] text-muted-foreground">{speed} km/h</span>
                     </button>
