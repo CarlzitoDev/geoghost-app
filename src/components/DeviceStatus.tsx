@@ -1,8 +1,8 @@
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { toggleDeviceConnection, toggleDevMode, type DeviceStatus } from "@/lib/device-api";
+import { type DeviceStatus } from "@/lib/device-api";
 import { RefreshCw, ChevronDown, ChevronUp, Cable, Smartphone, ShieldCheck, ShieldAlert } from "lucide-react";
+import { useState } from "react";
 
 interface DeviceStatusCardProps {
   status: DeviceStatus | null;
@@ -82,36 +82,16 @@ export function DeviceStatusCard({ status, onRefresh, loading }: DeviceStatusCar
               </div>
             )}
 
-            <div className="flex gap-1.5 pt-0.5">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={onRefresh}
-                disabled={loading}
-                className="flex-1 text-[11px] h-8"
-              >
-                <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
-                Refresh
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => { toggleDeviceConnection(); onRefresh(); }}
-                className="text-[11px] h-8"
-              >
-                {connected ? "Disconnect" : "Connect"}
-              </Button>
-              {connected && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => { toggleDevMode(); onRefresh(); }}
-                  className="text-[11px] h-8"
-                >
-                  {devMode ? "Dev Off" : "Dev On"}
-                </Button>
-              )}
-            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={onRefresh}
+              disabled={loading}
+              className="w-full text-[11px] h-8"
+            >
+              <RefreshCw className={`h-3 w-3 mr-1.5 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
           </CardContent>
         </Card>
       )}
