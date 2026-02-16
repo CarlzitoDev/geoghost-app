@@ -834,7 +834,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
             </p>
           )}
 
-          <p className="text-[9px] text-muted-foreground/60 text-center tracking-wide uppercase">For developer/QA testing only</p>
+          
         </div>
       </div>
     </div>
