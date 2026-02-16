@@ -33,7 +33,7 @@ function createWindow() {
 
   const isDev = process.env.ELECTRON_DEV === "true";
   if (isDev) {
-    mainWindow.loadURL("http://localhost:5173");
+    mainWindow.loadURL(process.env.VITE_DEV_URL || "http://localhost:8080");
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
