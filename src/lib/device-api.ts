@@ -61,24 +61,8 @@ export async function getDeviceStatus(): Promise<DeviceStatus> {
   };
 }
 
-export async function setLocation(lat: number, lng: number): Promise<{ ok: boolean; error?: string }> {
+export async function setLocation(lat: number, lng: number): Promise<{ ok: boolean; error?: string; method?: string }> {
   if (isElectron) {
-    // Ensure tunnel is running before setting location (iOS 17+)
-    try {
-      const tunnelStatus = await window.electronAPI!.getTunnelStatus();
-      if (!tunnelStatus.active) {
-        console.log("[geoghost] No active tunnel, starting one...");
-        const tunnelResult = await window.electronAPI!.startTunnel();
-        if (!tunnelResult.ok) {
-          console.warn("[geoghost] Tunnel failed:", tunnelResult.error);
-          // Continue anyway — location:set handler has its own fallbacks
-        } else {
-          console.log("[geoghost] Tunnel started:", tunnelResult.host, tunnelResult.port);
-        }
-      }
-    } catch (e) {
-      console.warn("[geoghost] Tunnel pre-check failed:", e);
-    }
     const res = await window.electronAPI!.setLocation(lat, lng);
     console.log("[geoghost] setLocation result:", JSON.stringify(res));
     return res;
