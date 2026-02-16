@@ -12,7 +12,6 @@ export interface DeviceStatus {
 // Type-safe access to the Electron bridge injected by preload.js
 interface ElectronAPI {
   getDeviceStatus: () => Promise<DeviceStatus>;
-  getDeviceLocation: () => Promise<{ ok: boolean; lat?: number; lng?: number; error?: string }>;
   setLocation: (lat: number, lng: number) => Promise<{ ok: boolean; error?: string }>;
   resetLocation: () => Promise<{ ok: boolean; error?: string }>;
   startTunnel: () => Promise<{ ok: boolean; host?: string; port?: string; error?: string }>;
@@ -46,13 +45,6 @@ export function setDeviceConnected(val: boolean) {
 }
 
 // ─── Unified API ───
-
-export async function getDeviceLocation(): Promise<{ ok: boolean; lat?: number; lng?: number; error?: string }> {
-  if (isElectron) {
-    return window.electronAPI!.getDeviceLocation();
-  }
-  return { ok: false, error: "Not in Electron" };
-}
 
 export async function getDeviceStatus(): Promise<DeviceStatus> {
   if (isElectron) {
