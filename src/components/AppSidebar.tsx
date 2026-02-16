@@ -7,34 +7,34 @@ export function AppSidebar() {
 
   return (
     <>
-      <aside className="flex h-screen w-16 flex-col items-center border-r border-border bg-sidebar-background py-4">
+      <aside className="flex h-screen w-[60px] flex-col items-center border-r border-border/50 bg-sidebar-background py-5">
         {/* Logo */}
-        <div className="mb-8 flex flex-col items-center gap-1">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-            <Ghost className="h-6 w-6 text-primary" />
+        <div className="mb-10 flex flex-col items-center gap-1.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 glow-sm">
+            <Ghost className="h-5 w-5 text-primary" />
           </div>
-          <span className="text-[9px] font-bold uppercase tracking-widest text-primary">
+          <span className="text-[8px] font-semibold uppercase tracking-[0.2em] text-primary/70 text-glow">
             geo
           </span>
         </div>
 
         {/* Nav items */}
-        <nav className="flex flex-1 flex-col items-center gap-2">
+        <nav className="flex flex-1 flex-col items-center gap-1.5">
           <button
-            className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors"
+            className="group flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary glow-sm"
             title="App"
           >
-            <MapPin className="h-5 w-5" />
+            <MapPin className="h-4.5 w-4.5 transition-transform group-hover:scale-110" />
           </button>
         </nav>
 
         {/* Settings at bottom */}
         <button
           onClick={() => setHelpOpen(true)}
-          className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          className="group flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-secondary hover:text-foreground"
           title="Settings & Help"
         >
-          <Settings className="h-5 w-5" />
+          <Settings className="h-4.5 w-4.5 transition-transform group-hover:rotate-45" />
         </button>
       </aside>
 
