@@ -40,6 +40,8 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
   const simulationIndex = useRef(0);
 
   const connected = deviceStatus?.connected ?? false;
+  const devMode = deviceStatus?.developerMode ?? false;
+  const canSpoof = connected && devMode;
 
   // Init map
   useEffect(() => {
@@ -111,7 +113,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
   }, [searchQuery, flyTo]);
 
   const handleSetLocation = useCallback(async () => {
-    if (!connected) { toast.error("No device connected."); return; }
+    if (!canSpoof) { toast.error(!connected ? "No device connected." : "Developer Mode is disabled."); return; }
     setSettingLocation(true);
     const res = await setLocation(coords.lat, coords.lng);
     setSettingLocation(false);
@@ -125,7 +127,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
   }, [coords, connected, onAddRecent]);
 
   const handleResetLocation = useCallback(async () => {
-    if (!connected) { toast.error("No device connected."); return; }
+    if (!canSpoof) { toast.error(!connected ? "No device connected." : "Developer Mode is disabled."); return; }
     setResettingLocation(true);
     const res = await resetLocation();
     setResettingLocation(false);
@@ -206,7 +208,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
       return;
     }
     if (waypoints.length < 2) { toast.error("Add at least 2 waypoints"); return; }
-    if (!connected) { toast.error("No device connected."); return; }
+    if (!canSpoof) { toast.error(!connected ? "No device connected." : "Developer Mode is disabled."); return; }
     setSimulating(true);
     simulationIndex.current = 0;
     simulationRef.current = window.setInterval(() => {
@@ -354,8 +356,10 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
           </Tabs>
 
           {/* Error state */}
-          {!connected && (
-            <p className="text-xs text-destructive">⚠ No device connected. Set/Reset disabled.</p>
+          {!canSpoof && (
+            <p className="text-xs text-destructive">
+              {!connected ? "⚠ No device connected." : "⚠ Developer Mode is disabled."} Set/Reset disabled.
+            </p>
           )}
 
           <p className="text-[10px] text-muted-foreground text-center">For developer/QA testing only.</p>
