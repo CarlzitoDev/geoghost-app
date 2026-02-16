@@ -1,6 +1,7 @@
 import { useState, useCallback, useSyncExternalStore } from "react";
 
 export type TransportMode = "walk" | "bike" | "drive";
+export type TunnelMode = "auto" | "quic" | "sudo";
 
 export interface AppSettings {
   mapStyle: "dark" | "satellite" | "streets";
@@ -8,6 +9,7 @@ export interface AppSettings {
   transportMode: TransportMode;
   autoSaveRecents: boolean;
   maxRecents: number;
+  tunnelMode: TunnelMode;
 }
 
 /** Speeds in km/h */
@@ -25,6 +27,7 @@ const defaultSettings: AppSettings = {
   transportMode: "walk",
   autoSaveRecents: true,
   maxRecents: 10,
+  tunnelMode: "auto",
 };
 
 function loadSettings(): AppSettings {
