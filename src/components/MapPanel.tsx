@@ -783,7 +783,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
       {/* Bottom controls */}
       <div className="absolute bottom-4 left-4 right-4 z-10">
         <div className="rounded-2xl glass-strong p-4 space-y-3 shadow-2xl shadow-black/30">
-          {/* Coordinates */}
+          {/* Coordinates row */}
           <div className="flex items-center gap-2 text-xs">
             <div className="flex items-center gap-1.5 rounded-md bg-secondary/50 px-2 py-1">
               <span className="text-muted-foreground text-[10px] uppercase tracking-wider">Lat</span>
@@ -795,15 +795,11 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
             </div>
             <Popover>
               <PopoverTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="ml-auto h-7 text-[11px] text-muted-foreground hover:text-primary"
-                >
-                  <Star className="h-3 w-3 mr-1" /> Save
+                <Button size="sm" variant="ghost" className="ml-auto h-7 w-7 p-0 text-muted-foreground hover:text-primary" title="Save to favorites">
+                  <Star className="h-3.5 w-3.5" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-56 glass-strong p-3" align="end">
+              <PopoverContent className="w-56 glass-strong p-3 bg-popover z-50" align="end">
                 <div className="space-y-2">
                   <p className="text-[11px] font-medium text-foreground">Save to Favorites</p>
                   <Input
@@ -835,11 +831,15 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
             </Popover>
           </div>
 
-          {/* Tabs */}
+          {/* Mode tabs + actions */}
           <Tabs value={mode} onValueChange={(v) => { setMode(v as "static" | "route"); if (v === "static") clearRoute(); }}>
-            <TabsList className="h-8 bg-secondary/50 rounded-lg">
-              <TabsTrigger value="static" className="text-[11px] h-6 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:glow-sm">Static</TabsTrigger>
-              <TabsTrigger value="route" className="text-[11px] h-6 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:glow-sm">Route</TabsTrigger>
+            <TabsList className="h-8 bg-secondary/50 rounded-lg w-full">
+              <TabsTrigger value="static" className="flex-1 text-[11px] h-6 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:glow-sm">
+                <MapPin className="h-3 w-3 mr-1" /> Static
+              </TabsTrigger>
+              <TabsTrigger value="route" className="flex-1 text-[11px] h-6 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:glow-sm">
+                <Navigation className="h-3 w-3 mr-1" /> Route
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="static" className="mt-2.5">
@@ -852,12 +852,11 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
                 <div className="flex gap-2">
                   <Button onClick={handleSetLocation} disabled={settingLocation || !canSpoof} className="flex-1 bg-primary text-primary-foreground hover:bg-primary/85 h-9 glow-primary font-medium text-xs">
                     {settingLocation ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Navigation className="h-3.5 w-3.5" />}
-                    Change Location
+                    Set Location
                   </Button>
                   {locationChanged && (
-                    <Button onClick={handleResetLocation} disabled={resettingLocation || !canSpoof} variant="destructive" className="h-9 text-xs">
-                      {resettingLocation ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                      Reset
+                    <Button onClick={handleResetLocation} disabled={resettingLocation || !canSpoof} variant="destructive" className="h-9 text-xs px-3">
+                      {resettingLocation ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Reset"}
                     </Button>
                   )}
                 </div>
@@ -879,24 +878,24 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
               {/* Stats bar */}
               {waypoints.length >= 2 && !simulating && (
                 <div className="flex items-center gap-3 rounded-lg bg-secondary/40 px-3 py-2">
-                  <div className="text-center">
+                  <div className="text-center flex-1">
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Distance</p>
                     <p className="text-sm font-semibold text-foreground">{formatDistance(totalKm)}</p>
                   </div>
                   <div className="h-6 w-px bg-border/40" />
-                  <div className="text-center">
-                    <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Est. Time</p>
+                  <div className="text-center flex-1">
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-wider">ETA</p>
                     <p className="text-sm font-semibold text-foreground">{formatEta(totalKm, speed)}</p>
                   </div>
                   <div className="h-6 w-px bg-border/40" />
-                  <div className="text-center">
+                  <div className="text-center flex-1">
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Mode</p>
                     <p className="text-xs font-medium text-foreground">{TRANSPORT_SPEEDS[settings.transportMode].label}</p>
                   </div>
                 </div>
               )}
 
-              {/* Action buttons */}
+              {/* Main action row */}
               <div className="flex gap-1.5">
                 <Button
                   size="sm"
@@ -906,57 +905,54 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
                   className={`flex-1 text-[11px] h-9 ${!simulating ? "glow-sm" : ""}`}
                 >
                   {simulating ? <Pause className="h-3.5 w-3.5 mr-1" /> : <Play className="h-3.5 w-3.5 mr-1" />}
-                  {simulating ? "Stop" : "Simulate Route"}
+                  {simulating ? "Stop" : "Simulate"}
                 </Button>
-                {waypoints.length > 0 && (
-                  <Button size="sm" variant="ghost" onClick={clearRoute} className="text-[11px] h-9 text-muted-foreground">
-                    <Trash2 className="h-3.5 w-3.5 mr-1" /> Clear
+                {waypoints.length > 0 && !simulating && (
+                  <Button size="sm" variant="ghost" onClick={clearRoute} className="text-[11px] h-9 text-muted-foreground hover:text-destructive px-3">
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
+                )}
+                {!simulating && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button size="sm" variant="secondary" className="text-[11px] h-9 px-3 bg-secondary/50">
+                        GPX
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-40 p-1.5 bg-popover z-50" align="end">
+                      <input ref={gpxInputRef} type="file" accept=".gpx" className="hidden" onChange={handleGpxImport} />
+                      <button
+                        onClick={() => gpxInputRef.current?.click()}
+                        className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-foreground hover:bg-secondary/60 transition-colors"
+                      >
+                        <Upload className="h-3 w-3" /> Import
+                      </button>
+                      <button
+                        onClick={handleGpxExport}
+                        disabled={waypoints.length < 2}
+                        className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-foreground hover:bg-secondary/60 transition-colors disabled:opacity-40"
+                      >
+                        <Download className="h-3 w-3" /> Export
+                      </button>
+                    </PopoverContent>
+                  </Popover>
                 )}
               </div>
 
-              {/* GPX Import/Export */}
-              <div className="flex gap-1.5">
-                <input
-                  ref={gpxInputRef}
-                  type="file"
-                  accept=".gpx"
-                  className="hidden"
-                  onChange={handleGpxImport}
-                />
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => gpxInputRef.current?.click()}
-                  className="flex-1 text-[11px] h-8 bg-secondary/50"
-                >
-                  <Upload className="h-3 w-3 mr-1" /> Import GPX
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={handleGpxExport}
-                  disabled={waypoints.length < 2}
-                  className="flex-1 text-[11px] h-8 bg-secondary/50"
-                >
-                  <Download className="h-3 w-3 mr-1" /> Export GPX
-                </Button>
-              </div>
-
-              <p className="text-[10px] text-muted-foreground">
-                {waypoints.length} point{waypoints.length !== 1 ? "s" : ""} · Routes snap to nearby roads
-              </p>
+              {waypoints.length > 0 && !simulating && (
+                <p className="text-[10px] text-muted-foreground text-center">
+                  {waypoints.length} point{waypoints.length !== 1 ? "s" : ""} · snapped to roads
+                </p>
+              )}
             </TabsContent>
           </Tabs>
 
           {/* Error state */}
           {!canSpoof && (
-            <p className="text-[11px] text-destructive/90 rounded-md bg-destructive/8 px-2.5 py-1.5">
-              {!connected ? "No device connected." : "Developer Mode is disabled."} Actions disabled.
+            <p className="text-[11px] text-destructive/90 rounded-md bg-destructive/8 px-2.5 py-1.5 text-center">
+              {!connected ? "No device connected" : "Developer Mode disabled"}
             </p>
           )}
-
-          
         </div>
       </div>
       <SudoPasswordDialog
