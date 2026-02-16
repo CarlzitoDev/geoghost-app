@@ -63,7 +63,25 @@ export async function getDeviceStatus(): Promise<DeviceStatus> {
 
 export async function setLocation(lat: number, lng: number): Promise<{ ok: boolean; error?: string }> {
   if (isElectron) {
-    return window.electronAPI!.setLocation(lat, lng);
+    // Ensure tunnel is running before setting location (iOS 17+)
+    try {
+      const tunnelStatus = await window.electronAPI!.getTunnelStatus();
+      if (!tunnelStatus.active) {
+        console.log("[geoghost] No active tunnel, starting one...");
+        const tunnelResult = await window.electronAPI!.startTunnel();
+        if (!tunnelResult.ok) {
+          console.warn("[geoghost] Tunnel failed:", tunnelResult.error);
+          // Continue anyway — location:set handler has its own fallbacks
+        } else {
+          console.log("[geoghost] Tunnel started:", tunnelResult.host, tunnelResult.port);
+        }
+      }
+    } catch (e) {
+      console.warn("[geoghost] Tunnel pre-check failed:", e);
+    }
+    const res = await window.electronAPI!.setLocation(lat, lng);
+    console.log("[geoghost] setLocation result:", JSON.stringify(res));
+    return res;
   }
   // Mock fallback
   await delay(600 + Math.random() * 400);
@@ -73,7 +91,9 @@ export async function setLocation(lat: number, lng: number): Promise<{ ok: boole
 
 export async function resetLocation(): Promise<{ ok: boolean; error?: string }> {
   if (isElectron) {
-    return window.electronAPI!.resetLocation();
+    const res = await window.electronAPI!.resetLocation();
+    console.log("[geoghost] resetLocation result:", JSON.stringify(res));
+    return res;
   }
   // Mock fallback
   await delay(500 + Math.random() * 300);
