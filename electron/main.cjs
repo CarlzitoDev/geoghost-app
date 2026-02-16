@@ -55,7 +55,11 @@ function run(cmd) {
 // ─── Check if pymobiledevice3 is installed ───
 function hasPyMobileDevice() {
   try {
-    execSync("pymobiledevice3 --help", { stdio: "ignore" });
+    const env = {
+      ...process.env,
+      PATH: `${process.env.PATH}:/usr/local/bin:/opt/homebrew/bin:/Users/${process.env.USER}/.local/bin:/Library/Frameworks/Python.framework/Versions/3.14/bin:/Users/${process.env.USER}/Library/Python/3.11/bin:/Users/${process.env.USER}/Library/Python/3.12/bin:/Users/${process.env.USER}/Library/Python/3.13/bin:/Users/${process.env.USER}/Library/Python/3.14/bin`,
+    };
+    execSync("pymobiledevice3 --help", { stdio: "ignore", env });
     return true;
   } catch {
     return false;
