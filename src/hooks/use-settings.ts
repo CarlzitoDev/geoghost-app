@@ -11,10 +11,10 @@ export interface AppSettings {
 }
 
 /** Speeds in km/h */
-export const TRANSPORT_SPEEDS: Record<TransportMode, { speed: number; label: string; emoji: string }> = {
-  walk: { speed: 5, label: "Walking", emoji: "🚶" },
-  bike: { speed: 15, label: "Cycling", emoji: "🚴" },
-  drive: { speed: 50, label: "Driving", emoji: "🚗" },
+export const TRANSPORT_SPEEDS: Record<TransportMode, { speed: number; label: string; icon: string }> = {
+  walk: { speed: 5, label: "Walking", icon: "footprints" },
+  bike: { speed: 15, label: "Cycling", icon: "bike" },
+  drive: { speed: 50, label: "Driving", icon: "car" },
 };
 
 const STORAGE_KEY = "geoghost-settings";

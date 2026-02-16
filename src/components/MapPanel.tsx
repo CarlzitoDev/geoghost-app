@@ -4,8 +4,10 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import {
   Search, Star, Clock, MapPin, Navigation, Play, Pause,
   Trash2, Loader2, Undo2, Pencil, MousePointerClick,
+  Upload, Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -23,6 +25,8 @@ import {
   snapDrawnPath,
   transportToProfile,
 } from "@/lib/route-utils";
+
+import { parseGpx, exportGpx, downloadFile } from "@/lib/gpx-utils";
 
 const MAPBOX_TOKEN = "pk.eyJ1IjoiY2FybHppdG8iLCJhIjoiY21scGRkMWRsMWFtODNlcXcwa25yNnprcSJ9.KE1oBQcON-JrySAX_HlKKg";
 const DEFAULT_CENTER: [number, number] = [-122.4194, 37.7749];
@@ -58,7 +62,9 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
   const [isDrawing, setIsDrawing] = useState(false);
   const drawPointsRef = useRef<Waypoint[]>([]);
   const [simulating, setSimulating] = useState(false);
+  const [simProgress, setSimProgress] = useState(0);
   const simulationRef = useRef<number | null>(null);
+  const gpxInputRef = useRef<HTMLInputElement>(null);
   const [undoStack, setUndoStack] = useState<Waypoint[][]>([]);
 
   const connected = deviceStatus?.connected ?? false;
@@ -81,7 +87,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
 
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "bottom-right");
 
-    const marker = new mapboxgl.Marker({ color: "#39e75f", draggable: true })
+    const marker = new mapboxgl.Marker({ color: "hsl(160, 55%, 49%)", draggable: true })
       .setLngLat(DEFAULT_CENTER)
       .addTo(map);
 
@@ -148,7 +154,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
 
       // Add marker
       const m = new mapboxgl.Marker({
-        color: currentWps.length === 0 ? "#39e75f" : "#a855f7",
+        color: currentWps.length === 0 ? "hsl(160, 55%, 49%)" : "#a855f7",
         scale: 0.7,
       })
         .setLngLat([wp.lng, wp.lat])
@@ -269,7 +275,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
       const currentWps = waypointsRef.current;
       setUndoStack((prev) => [...prev, [...currentWps]]);
 
-      const startM = new mapboxgl.Marker({ color: currentWps.length === 0 ? "#39e75f" : "#a855f7", scale: 0.7 })
+      const startM = new mapboxgl.Marker({ color: currentWps.length === 0 ? "hsl(160, 55%, 49%)" : "#a855f7", scale: 0.7 })
         .setLngLat([sampledWps[0].lng, sampledWps[0].lat])
         .addTo(map);
       const endM = new mapboxgl.Marker({ color: "#a855f7", scale: 0.7 })
@@ -415,7 +421,61 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
       simulationRef.current = null;
     }
     setSimulating(false);
+    setSimProgress(0);
   }, [removePreviewLine]);
+
+  // GPX Import
+  const handleGpxImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const points = parseGpx(text);
+      if (points.length === 0) {
+        toast.error("No points found in GPX file");
+        return;
+      }
+      clearRoute();
+      setMode("route");
+      const map = mapRef.current;
+      if (!map) return;
+
+      points.forEach((wp, i) => {
+        const m = new mapboxgl.Marker({
+          color: i === 0 ? "hsl(160, 55%, 49%)" : "#a855f7",
+          scale: 0.7,
+        })
+          .setLngLat([wp.lng, wp.lat])
+          .addTo(map);
+        routeMarkersRef.current.push(m);
+      });
+
+      setWaypoints(points);
+      setSnappedRoute(points);
+      map.fitBounds(
+        points.reduce(
+          (bounds, wp) => bounds.extend([wp.lng, wp.lat]),
+          new mapboxgl.LngLatBounds([points[0].lng, points[0].lat], [points[0].lng, points[0].lat])
+        ),
+        { padding: 80 }
+      );
+      toast.success(`Imported ${points.length} points from GPX`);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }, [clearRoute]);
+
+  const handleGpxExport = useCallback(() => {
+    const routePoints = snappedRoute.length >= 2 ? snappedRoute : waypoints;
+    if (routePoints.length < 2) {
+      toast.error("Add at least 2 waypoints to export");
+      return;
+    }
+    const gpx = exportGpx(routePoints);
+    downloadFile(gpx, "geoghost-route.gpx");
+    toast.success("GPX file exported");
+  }, [snappedRoute, waypoints]);
 
   const undoLastWaypoint = useCallback(() => {
     if (undoStack.length === 0) return;
@@ -477,6 +537,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     }
 
     setSimulating(true);
+    setSimProgress(0);
     let stepIdx = 0;
     let lastTime = performance.now();
 
@@ -485,6 +546,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
         lastTime = now;
         if (stepIdx >= steps.length) {
           setSimulating(false);
+          setSimProgress(100);
           simulationRef.current = null;
           toast.success("Route simulation complete");
           return;
@@ -497,6 +559,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
         setCoords(rounded);
         markerRef.current?.setLngLat([rounded.lng, rounded.lat]);
         stepIdx++;
+        setSimProgress(Math.round((stepIdx / steps.length) * 100));
       }
       simulationRef.current = requestAnimationFrame(animate);
     };
@@ -680,8 +743,19 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
             </TabsContent>
 
             <TabsContent value="route" className="mt-2.5 space-y-2.5">
+              {/* Simulation progress */}
+              {simulating && (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-muted-foreground">Simulating...</span>
+                    <span className="text-primary font-mono">{simProgress}%</span>
+                  </div>
+                  <Progress value={simProgress} className="h-1.5" />
+                </div>
+              )}
+
               {/* Stats bar */}
-              {waypoints.length >= 2 && (
+              {waypoints.length >= 2 && !simulating && (
                 <div className="flex items-center gap-3 rounded-lg bg-secondary/40 px-3 py-2">
                   <div className="text-center">
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Distance</p>
@@ -695,7 +769,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
                   <div className="h-6 w-px bg-border/40" />
                   <div className="text-center">
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Mode</p>
-                    <p className="text-sm">{TRANSPORT_SPEEDS[settings.transportMode].emoji}</p>
+                    <p className="text-xs font-medium text-foreground">{TRANSPORT_SPEEDS[settings.transportMode].label}</p>
                   </div>
                 </div>
               )}
@@ -719,6 +793,34 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
                 )}
               </div>
 
+              {/* GPX Import/Export */}
+              <div className="flex gap-1.5">
+                <input
+                  ref={gpxInputRef}
+                  type="file"
+                  accept=".gpx"
+                  className="hidden"
+                  onChange={handleGpxImport}
+                />
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => gpxInputRef.current?.click()}
+                  className="flex-1 text-[11px] h-8 bg-secondary/50"
+                >
+                  <Upload className="h-3 w-3 mr-1" /> Import GPX
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleGpxExport}
+                  disabled={waypoints.length < 2}
+                  className="flex-1 text-[11px] h-8 bg-secondary/50"
+                >
+                  <Download className="h-3 w-3 mr-1" /> Export GPX
+                </Button>
+              </div>
+
               <p className="text-[10px] text-muted-foreground">
                 {waypoints.length} point{waypoints.length !== 1 ? "s" : ""} · Routes snap to nearby roads
               </p>
@@ -728,7 +830,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
           {/* Error state */}
           {!canSpoof && (
             <p className="text-[11px] text-destructive/90 rounded-md bg-destructive/8 px-2.5 py-1.5">
-              {!connected ? "⚠ No device connected." : "⚠ Developer Mode is disabled."} Actions disabled.
+              {!connected ? "No device connected." : "Developer Mode is disabled."} Actions disabled.
             </p>
           )}
 

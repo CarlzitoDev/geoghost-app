@@ -60,7 +60,7 @@ export function DeviceStatusCard({ status, onRefresh, loading }: DeviceStatusCar
                 </div>
                 {!devMode && (
                   <p className="text-[10px] text-[hsl(var(--warning))] leading-relaxed rounded-md bg-[hsl(var(--warning)/0.08)] px-2 py-1.5">
-                    ⚠ Enable Developer Mode on your device for full functionality.
+                    Enable Developer Mode on your device for full functionality.
                   </p>
                 )}
               </div>
