@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { setLocation, resetLocation, type DeviceStatus } from "@/lib/mock-api";
 import { type SavedLocation } from "@/hooks/use-location-storage";
 
-const MAPBOX_TOKEN = "YOUR_MAPBOX_TOKEN";
+const MAPBOX_TOKEN = "pk.eyJ1IjoiY2FybHppdG8iLCJhIjoiY21scGRkMWRsMWFtODNlcXcwa25yNnprcSJ9.KE1oBQcON-JrySAX_HlKKg";
 const DEFAULT_CENTER: [number, number] = [-122.4194, 37.7749];
 
 interface MapPanelProps {
