@@ -73,22 +73,50 @@ ipcMain.handle("device:status", async () => {
   }
 
   try {
-    const output = await run("pymobiledevice3 usbmux list --no-color -o json");
-    const devices = JSON.parse(output);
+    // Try JSON output first
+    let output;
+    try {
+      output = await run("pymobiledevice3 usbmux list --no-color -o json");
+    } catch {
+      // Fallback: try without flags
+      output = await run("pymobiledevice3 usbmux list");
+    }
 
-    if (!devices || devices.length === 0) {
+    let devices;
+    try {
+      devices = JSON.parse(output);
+    } catch {
+      // If JSON parsing fails, the device list might be in a different format
+      console.log("pymobiledevice3 raw output:", output);
+      if (output && output.length > 0) {
+        return {
+          connected: true,
+          name: "iOS Device",
+          ios: "",
+          connection: "USB",
+          developerMode: true,
+        };
+      }
       return { connected: false, name: "", ios: "", connection: "", developerMode: false };
     }
 
-    const device = devices[0];
+    // Handle both array and object responses
+    const deviceList = Array.isArray(devices) ? devices : [devices];
+
+    if (!deviceList || deviceList.length === 0) {
+      return { connected: false, name: "", ios: "", connection: "", developerMode: false };
+    }
+
+    const device = deviceList[0];
     return {
       connected: true,
-      name: device.DeviceName || device.ProductType || "iOS Device",
-      ios: device.ProductVersion || "",
+      name: device.DeviceName || device.ProductType || device.Name || "iOS Device",
+      ios: device.ProductVersion || device.iOSVersion || "",
       connection: "USB",
-      developerMode: true, // If device is visible via usbmux, it's generally accessible
+      developerMode: true,
     };
   } catch (err) {
+    console.error("device:status error:", err.message);
     return {
       connected: false,
       name: "",
