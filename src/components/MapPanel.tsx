@@ -660,7 +660,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
   return (
     <div className="relative flex-1 overflow-hidden">
       {/* ═══ TOP BAR ═══ */}
-      <div className="absolute top-0 left-0 right-0 z-20 flex items-center gap-3 px-4 py-3 bg-background/80 backdrop-blur-xl border-b border-border/30">
+      <div className="absolute top-0 left-0 right-0 z-20 flex items-center gap-3 px-4 py-3">
         {/* Device status chip */}
         <Popover>
           <PopoverTrigger asChild>
@@ -784,8 +784,8 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
       )}
 
       {/* ═══ BOTTOM CONTROLS ═══ */}
-      <div className="absolute bottom-0 left-0 right-0 z-10">
-        <div className="bg-background/80 backdrop-blur-xl border-t border-border/30 px-4 py-3 space-y-3">
+      <div className="absolute bottom-4 left-4 right-4 z-10">
+        <div className="px-4 py-3 space-y-3">
 
           {/* Static mode */}
           {mode === "static" && (
