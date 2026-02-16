@@ -611,36 +611,44 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
       }
     }
 
-    setSimulating(true);
-    setSimProgress(0);
     let stepIdx = 0;
     let lastTime = performance.now();
 
-    const animate = (now: number) => {
-      if (now - lastTime >= TICK_MS) {
-        lastTime = now;
-        if (stepIdx >= steps.length) {
-          setSimulating(false);
-          setSimProgress(100);
-          simulationRef.current = null;
-          toast.success("Route simulation complete");
-          return;
-        }
-        const step = steps[stepIdx];
-        const rounded = {
-          lat: parseFloat(step.lat.toFixed(6)),
-          lng: parseFloat(step.lng.toFixed(6)),
-        };
-        setCoords(rounded);
-        markerRef.current?.setLngLat([rounded.lng, rounded.lat]);
-        stepIdx++;
-        setSimProgress(Math.round((stepIdx / steps.length) * 100));
-      }
-      simulationRef.current = requestAnimationFrame(animate);
-    };
+    // Ensure tunneld is running before starting simulation
+    (async () => {
+      const tunnelReady = await ensureTunneld();
+      if (!tunnelReady) return;
 
-    simulationRef.current = requestAnimationFrame(animate);
-  }, [simulating, snappedRoute, waypoints, connected, canSpoof, settings.transportMode]);
+      setSimulating(true);
+      setSimProgress(0);
+
+      const animate = (now: number) => {
+        if (now - lastTime >= TICK_MS) {
+          lastTime = now;
+          if (stepIdx >= steps.length) {
+            setSimulating(false);
+            setSimProgress(100);
+            simulationRef.current = null;
+            toast.success("Route simulation complete");
+            return;
+          }
+          const step = steps[stepIdx];
+          const rounded = {
+            lat: parseFloat(step.lat.toFixed(6)),
+            lng: parseFloat(step.lng.toFixed(6)),
+          };
+          setCoords(rounded);
+          markerRef.current?.setLngLat([rounded.lng, rounded.lat]);
+          setLocation(rounded.lat, rounded.lng).catch(() => {});
+          stepIdx++;
+          setSimProgress(Math.round((stepIdx / steps.length) * 100));
+        }
+        simulationRef.current = requestAnimationFrame(animate);
+      };
+
+      simulationRef.current = requestAnimationFrame(animate);
+    })();
+  }, [simulating, snappedRoute, waypoints, connected, canSpoof, settings.transportMode, ensureTunneld]);
 
   // Route stats
   const routePoints = snappedRoute.length >= 2 ? snappedRoute : waypoints;
