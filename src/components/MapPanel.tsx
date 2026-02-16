@@ -32,6 +32,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
   const [searchQuery, setSearchQuery] = useState("");
   const [settingLocation, setSettingLocation] = useState(false);
   const [resettingLocation, setResettingLocation] = useState(false);
+  const [locationChanged, setLocationChanged] = useState(false);
   const [mode, setMode] = useState<"static" | "route">("static");
   const [waypoints, setWaypoints] = useState<{ lat: number; lng: number }[]>([]);
   const [simulating, setSimulating] = useState(false);
@@ -115,7 +116,8 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     const res = await setLocation(coords.lat, coords.lng);
     setSettingLocation(false);
     if (res.ok) {
-      toast.success("Location set successfully");
+    toast.success("Location set successfully");
+      setLocationChanged(true);
       onAddRecent({ lat: coords.lat, lng: coords.lng, label: `${coords.lat}, ${coords.lng}` });
     } else {
       toast.error(res.error || "Failed to set location");
@@ -129,6 +131,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     setResettingLocation(false);
     if (res.ok) {
       toast.success("Location reset");
+      setLocationChanged(false);
     } else {
       toast.error(res.error || "Failed to reset location");
     }
@@ -322,10 +325,12 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
                   {settingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
                   Change Location
                 </Button>
-                <Button onClick={handleResetLocation} disabled={resettingLocation} variant="destructive" className="h-9">
-                  {resettingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Reset
-                </Button>
+                {locationChanged && (
+                  <Button onClick={handleResetLocation} disabled={resettingLocation} variant="destructive" className="h-9">
+                    {resettingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Reset
+                  </Button>
+                )}
               </div>
             </TabsContent>
 
