@@ -1,73 +1,106 @@
 
+# Package GeoGhost as a Desktop .exe
 
-# geoghost — Location Spoofing Developer Tool
+Since Lovable is a web-based editor, it **cannot** run Electron, install native dependencies, or build `.exe` files. This needs to be done on your local machine. Here's the exact step-by-step:
 
-A dark-themed, desktop-style web app for developer/QA testing of location-based iOS apps. Sleek dark UI with neon green map accents and a minimal sidebar.
+## Prerequisites
 
----
+- **Node.js** (v18+) installed on your PC
+- **Git** installed
+- **Python 3** + `pymobiledevice3` installed (`pip3 install pymobiledevice3`)
 
-## Layout & Navigation
+## Steps
 
-### Sidebar (slim, always visible)
-- **App name "geoghost"** with a ghost icon at top
-- **App** — main page (active by default)
-- **Settings icon** at the bottom — clicking it opens a slide-out panel or popover containing Help content (setup guide, troubleshooting, contact)
-- Dark background, icon + text items, neon green active indicator
+### 1. Clone your repo
 
-### Settings / Help Panel
-- Opens as a slide-out drawer or popover from the settings icon (not a separate page)
-- **Getting Started**: step-by-step guide (connect via USB, Trust, Developer Mode)
-- **Troubleshooting**: device not detected, permission denied, connection drops
-- **Contact**: "Open an issue on GitHub" placeholder link
-- Can be dismissed by clicking outside or a close button
+```text
+git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git
+cd YOUR_REPO
+```
 
----
+### 2. Install dependencies
 
-## App Page (single main page)
+```text
+npm install
+npm install --save-dev electron electron-builder concurrently wait-on
+```
 
-### 1. Device Status Indicator
-- Compact status chip in the top area showing connection state
-- **Connected**: green dot + device name
-- **Not Connected**: red/yellow dot + "No Device"
-- Clicking expands a **Device Detail Card** with:
-  - Device name, iOS version, connection type (USB)
-  - Refresh button
-  - When disconnected: checklist (USB, Trust, Developer Mode)
-- Mock API: simulates `GET /api/device/status`
+### 3. Update `package.json`
 
-### 2. Map Panel (full main area)
-- **Mapbox GL JS** map with dark/neon-green styling
-- Draggable pin/marker to select location
-- **Search bar** at top center for city/address/coordinates
-- **Coordinates display** showing selected lat/lng
-- **Static / Route toggle** tabs:
-  - **Static**: set a single GPS coordinate
-  - **Route**: define waypoints, see route line, play/pause movement simulation
-- **"Change Location"** button (green) and **"Reset Location"** button (pink/red)
-- Loading spinners and toast notifications on success/error
-- If device not connected: inline error "No device connected."
-- Small disclaimer: "For developer/QA testing only."
+Add these fields at the top level:
 
-### 3. Favorites & Recents
-- Accessible via bookmark/history icons on the map
-- **Favorites**: saved locations with add/remove, persisted in localStorage
-- **Recents**: last 10 auto-saved, persisted in localStorage
-- Clicking an item moves the pin and updates coordinates
+```text
+"main": "electron/main.js",
+```
 
----
+Add/replace these scripts:
 
-## Mock API Layer
-- All calls simulated client-side, no backend
-- `GET /api/device/status` — mock device info, toggleable state
-- `POST /api/location/set` — accepts `{ lat, lng, label? }`, returns `{ ok: true }`
-- `POST /api/location/reset` — returns `{ ok: true }`
-- Error states when device disconnected
+```text
+"scripts": {
+  "dev": "vite",
+  "build": "vite build",
+  "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DEV=true electron .\"",
+  "electron:build": "vite build && electron-builder --win"
+}
+```
 
-## Design & UX
-- Dark theme throughout, neon green accents
-- Rounded cards, soft shadows, clean spacing
-- Toast notifications (sonner) for all actions
-- Loading states on buttons
-- Mapbox dark style matching mockup aesthetic
-- localStorage persistence for favorites and recents
+Add a `build` config for electron-builder:
 
+```text
+"build": {
+  "appId": "com.geoghost.app",
+  "productName": "GeoGhost",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "electron/**/*"
+  ],
+  "win": {
+    "target": "nsis",
+    "icon": "public/favicon.ico"
+  }
+}
+```
+
+### 4. Fix Vite config for Electron
+
+In `vite.config.ts`, change the dev server port to `5173` (or update the Electron `main.js` URL to match port `8080`). The simplest fix: in `electron/main.js`, change `http://localhost:5173` to `http://localhost:8080`.
+
+Also add `base: "./"` to `vite.config.ts` so built files use relative paths:
+
+```text
+export default defineConfig(({ mode }) => ({
+  base: "./",
+  ...
+}));
+```
+
+### 5. Test in dev mode
+
+```text
+npm run electron:dev
+```
+
+This opens your app in a native window. Connect your iPhone via USB to test real location spoofing.
+
+### 6. Build the .exe
+
+```text
+npm run electron:build
+```
+
+Your installer will appear in the `release/` folder as a `.exe` file.
+
+## Summary
+
+| Step | Where | Command |
+|------|-------|---------|
+| Clone repo | Your PC terminal | `git clone ...` |
+| Install deps | Your PC terminal | `npm install && npm install -D electron electron-builder concurrently wait-on` |
+| Edit package.json | Your code editor | Add main, scripts, build config |
+| Dev test | Your PC terminal | `npm run electron:dev` |
+| Build .exe | Your PC terminal | `npm run electron:build` |
+
+All the Electron files (`electron/main.js`, `electron/preload.js`) and the device API (`src/lib/device-api.ts`) are already in your GitHub repo from our earlier work. You just need to install the Electron packages locally and build.
