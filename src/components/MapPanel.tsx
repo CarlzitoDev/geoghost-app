@@ -81,9 +81,9 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     mapRef.current?.flyTo({ center: [lng, lat], zoom: 14 });
   }, []);
 
-  const handleSearch = useCallback(() => {
+  const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return;
-    // Try parsing coordinates
+    // Try parsing coordinates first
     const coordMatch = searchQuery.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
     if (coordMatch) {
       const lat = parseFloat(coordMatch[1]);
@@ -91,24 +91,21 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
       flyTo(lat, lng);
       return;
     }
-    // Mock geocoding
-    const mockLocations: Record<string, [number, number]> = {
-      "san francisco": [37.7749, -122.4194],
-      "new york": [40.7128, -74.006],
-      "london": [51.5074, -0.1278],
-      "tokyo": [35.6762, 139.6503],
-      "paris": [48.8566, 2.3522],
-      "sydney": [-33.8688, 151.2093],
-      "berlin": [52.52, 13.405],
-      "los angeles": [34.0522, -118.2437],
-    };
-    const key = searchQuery.toLowerCase().trim();
-    const found = Object.entries(mockLocations).find(([k]) => key.includes(k));
-    if (found) {
-      flyTo(found[1][0], found[1][1]);
-      toast.success(`Found: ${found[0]}`);
-    } else {
-      toast.error("Location not found. Try coordinates (lat, lng).");
+    // Use Mapbox Geocoding API
+    try {
+      const res = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchQuery)}.json?access_token=${MAPBOX_TOKEN}&limit=1`
+      );
+      const data = await res.json();
+      if (data.features && data.features.length > 0) {
+        const [lng, lat] = data.features[0].center;
+        flyTo(lat, lng);
+        toast.success(`Found: ${data.features[0].place_name}`);
+      } else {
+        toast.error("Location not found.");
+      }
+    } catch {
+      toast.error("Search failed. Try coordinates (lat, lng).");
     }
   }, [searchQuery, flyTo]);
 
