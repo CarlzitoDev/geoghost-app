@@ -32,16 +32,7 @@ const Index = () => {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
       <AppSidebar />
-      <main className="relative flex flex-1 flex-col overflow-hidden p-3">
-        {/* Device status overlay */}
-        <div className="absolute left-7 top-7 z-20">
-          <DeviceStatusCard
-            status={deviceStatus}
-            onRefresh={refreshDevice}
-            loading={deviceLoading}
-          />
-        </div>
-
+      <main className="relative flex flex-1 flex-col overflow-hidden">
         {/* Map */}
         <MapPanel
           deviceStatus={deviceStatus}
@@ -50,6 +41,8 @@ const Index = () => {
           onAddFavorite={addFavorite}
           onRemoveFavorite={removeFavorite}
           onAddRecent={addRecent}
+          onRefreshDevice={refreshDevice}
+          deviceLoading={deviceLoading}
         />
       </main>
     </div>
