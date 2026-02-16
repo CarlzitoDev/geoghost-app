@@ -13,7 +13,7 @@ function createWindow() {
     title: "geoghost",
     backgroundColor: "#080808",
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
     },
