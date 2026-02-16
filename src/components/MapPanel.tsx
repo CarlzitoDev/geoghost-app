@@ -109,12 +109,13 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     }
   }, [settings.mapStyle]);
 
-  // Handle map clicks — different behavior per mode
+  // Handle map clicks — only in static mode
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
     const handleClick = (e: mapboxgl.MapMouseEvent) => {
+      if (mode !== "static") return;
       const { lat, lng } = e.lngLat;
       const point: Waypoint = { lat: parseFloat(lat.toFixed(6)), lng: parseFloat(lng.toFixed(6)) };
       setCoords(point);
@@ -123,7 +124,15 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
 
     map.on("click", handleClick);
     return () => { map.off("click", handleClick); };
-  }, []);
+  }, [mode]);
+
+  // Use refs to avoid stale closures in map event handlers
+  const waypointsRef = useRef<Waypoint[]>(waypoints);
+  waypointsRef.current = waypoints;
+  const snappedRouteRef = useRef<Waypoint[]>(snappedRoute);
+  snappedRouteRef.current = snappedRoute;
+  const profileRef = useRef(profile);
+  profileRef.current = profile;
 
   // Route mode: handle map clicks to add waypoints in tap mode
   useEffect(() => {
@@ -133,19 +142,20 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     const handleRouteClick = async (e: mapboxgl.MapMouseEvent) => {
       const { lat, lng } = e.lngLat;
       const wp: Waypoint = { lat: parseFloat(lat.toFixed(6)), lng: parseFloat(lng.toFixed(6)) };
+      const currentWps = waypointsRef.current;
 
-      setUndoStack((prev) => [...prev, [...waypoints]]);
+      setUndoStack((prev) => [...prev, [...currentWps]]);
 
       // Add marker
       const m = new mapboxgl.Marker({
-        color: waypoints.length === 0 ? "#39e75f" : "#a855f7",
+        color: currentWps.length === 0 ? "#39e75f" : "#a855f7",
         scale: 0.7,
       })
         .setLngLat([wp.lng, wp.lat])
         .addTo(map);
       routeMarkersRef.current.push(m);
 
-      const newWaypoints = [...waypoints, wp];
+      const newWaypoints = [...currentWps, wp];
       setWaypoints(newWaypoints);
 
       // Snap to road between last two waypoints
@@ -153,7 +163,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
         setIsSnapping(true);
         const from = newWaypoints[newWaypoints.length - 2];
         const to = wp;
-        const snapped = await snapToRoads(from, to, profile);
+        const snapped = await snapToRoads(from, to, profileRef.current);
 
         setSnappedRoute((prev) => {
           const base = prev.length > 0 ? prev : [from];
@@ -165,86 +175,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
 
     map.on("click", handleRouteClick);
     return () => { map.off("click", handleRouteClick); };
-  }, [mode, routeMode, waypoints, profile]);
-
-  // Route mode: drawing
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || mode !== "route" || routeMode !== "draw") return;
-
-    let drawing = false;
-
-    const onMouseDown = (e: mapboxgl.MapMouseEvent) => {
-      drawing = true;
-      drawPointsRef.current = [{ lat: e.lngLat.lat, lng: e.lngLat.lng }];
-      map.getCanvas().style.cursor = "crosshair";
-      // Disable map dragging while drawing
-      map.dragPan.disable();
-    };
-
-    const onMouseMove = (e: mapboxgl.MapMouseEvent) => {
-      if (!drawing) return;
-      const pt = { lat: e.lngLat.lat, lng: e.lngLat.lng };
-      const last = drawPointsRef.current[drawPointsRef.current.length - 1];
-      // Only add if moved enough (~10m)
-      if (haversine(last, pt) > 0.01) {
-        drawPointsRef.current.push(pt);
-        drawPreviewLine(drawPointsRef.current);
-      }
-    };
-
-    const onMouseUp = async () => {
-      if (!drawing) return;
-      drawing = false;
-      map.dragPan.enable();
-      map.getCanvas().style.cursor = "";
-
-      const points = drawPointsRef.current;
-      if (points.length < 2) return;
-
-      setIsSnapping(true);
-      const snapped = await snapDrawnPath(points, profile);
-      setIsSnapping(false);
-
-      // Sample waypoints from snapped path
-      const sampledWps: Waypoint[] = [];
-      const totalDist = routeDistance(snapped);
-      const numSamples = Math.max(2, Math.min(20, Math.ceil(totalDist / 0.1)));
-      for (let i = 0; i < numSamples; i++) {
-        const idx = Math.round((i / (numSamples - 1)) * (snapped.length - 1));
-        sampledWps.push(snapped[idx]);
-      }
-
-      setUndoStack((prev) => [...prev, [...waypoints]]);
-      
-      // Add markers for start/end
-      const startM = new mapboxgl.Marker({ color: "#39e75f", scale: 0.7 })
-        .setLngLat([sampledWps[0].lng, sampledWps[0].lat])
-        .addTo(map);
-      const endM = new mapboxgl.Marker({ color: "#a855f7", scale: 0.7 })
-        .setLngLat([sampledWps[sampledWps.length - 1].lng, sampledWps[sampledWps.length - 1].lat])
-        .addTo(map);
-      routeMarkersRef.current.push(startM, endM);
-
-      setWaypoints((prev) => [...prev, ...sampledWps]);
-      setSnappedRoute((prev) => [...prev, ...snapped]);
-
-      // Clear preview line
-      removePreviewLine();
-    };
-
-    map.on("mousedown", onMouseDown);
-    map.on("mousemove", onMouseMove);
-    map.on("mouseup", onMouseUp);
-
-    return () => {
-      map.off("mousedown", onMouseDown);
-      map.off("mousemove", onMouseMove);
-      map.off("mouseup", onMouseUp);
-      map.dragPan.enable();
-      map.getCanvas().style.cursor = "";
-    };
-  }, [mode, routeMode, waypoints, profile]);
+  }, [mode, routeMode]);
 
   // Draw preview line while drawing
   const drawPreviewLine = useCallback((points: Waypoint[]) => {
@@ -279,6 +210,93 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     if (map.getLayer("draw-preview-layer")) map.removeLayer("draw-preview-layer");
     if (map.getSource("draw-preview")) map.removeSource("draw-preview");
   }, []);
+
+  // Route mode: drawing — stable effect, no waypoints/profile dependency
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || mode !== "route" || routeMode !== "draw") return;
+
+    let drawing = false;
+    let drawingStarted = false;
+
+    const onMouseDown = (e: mapboxgl.MapMouseEvent) => {
+      if ((e.originalEvent.target as HTMLElement)?.closest?.("button, [role=dialog], .glass-strong")) return;
+      e.preventDefault();
+      drawing = true;
+      drawingStarted = false;
+      drawPointsRef.current = [{ lat: e.lngLat.lat, lng: e.lngLat.lng }];
+      map.dragPan.disable();
+      map.getCanvas().style.cursor = "crosshair";
+    };
+
+    const onMouseMove = (e: mapboxgl.MapMouseEvent) => {
+      if (!drawing) return;
+      drawingStarted = true;
+      const pt = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+      const last = drawPointsRef.current[drawPointsRef.current.length - 1];
+      if (haversine(last, pt) > 0.005) {
+        drawPointsRef.current.push(pt);
+        drawPreviewLine(drawPointsRef.current);
+      }
+    };
+
+    const onMouseUp = async () => {
+      if (!drawing) return;
+      drawing = false;
+      map.dragPan.enable();
+      map.getCanvas().style.cursor = "crosshair";
+
+      const points = drawPointsRef.current;
+      drawPointsRef.current = [];
+
+      if (!drawingStarted || points.length < 3) {
+        removePreviewLine();
+        return;
+      }
+
+      setIsSnapping(true);
+      const snapped = await snapDrawnPath(points, profileRef.current);
+      setIsSnapping(false);
+
+      const sampledWps: Waypoint[] = [];
+      const totalDist = routeDistance(snapped);
+      const numSamples = Math.max(2, Math.min(20, Math.ceil(totalDist / 0.1)));
+      for (let i = 0; i < numSamples; i++) {
+        const idx = Math.round((i / (numSamples - 1)) * (snapped.length - 1));
+        sampledWps.push(snapped[idx]);
+      }
+
+      const currentWps = waypointsRef.current;
+      setUndoStack((prev) => [...prev, [...currentWps]]);
+
+      const startM = new mapboxgl.Marker({ color: currentWps.length === 0 ? "#39e75f" : "#a855f7", scale: 0.7 })
+        .setLngLat([sampledWps[0].lng, sampledWps[0].lat])
+        .addTo(map);
+      const endM = new mapboxgl.Marker({ color: "#a855f7", scale: 0.7 })
+        .setLngLat([sampledWps[sampledWps.length - 1].lng, sampledWps[sampledWps.length - 1].lat])
+        .addTo(map);
+      routeMarkersRef.current.push(startM, endM);
+
+      setWaypoints((prev) => [...prev, ...sampledWps]);
+      setSnappedRoute((prev) => [...prev, ...snapped]);
+
+      removePreviewLine();
+    };
+
+    map.on("mousedown", onMouseDown);
+    map.on("mousemove", onMouseMove);
+    map.on("mouseup", onMouseUp);
+
+    map.getCanvas().style.cursor = "crosshair";
+
+    return () => {
+      map.off("mousedown", onMouseDown);
+      map.off("mousemove", onMouseMove);
+      map.off("mouseup", onMouseUp);
+      map.dragPan.enable();
+      map.getCanvas().style.cursor = "";
+    };
+  }, [mode, routeMode, drawPreviewLine, removePreviewLine]);
 
   // Draw the snapped route line
   useEffect(() => {
