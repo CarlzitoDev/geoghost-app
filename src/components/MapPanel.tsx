@@ -227,39 +227,39 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
   }, [simulating, waypoints, connected, flyTo]);
 
   return (
-    <div className="relative flex-1 overflow-hidden rounded-xl border border-border">
+    <div className="relative flex-1 overflow-hidden rounded-2xl border border-border/40">
       {/* Search bar */}
-      <div className="absolute left-1/2 top-4 z-10 flex w-80 -translate-x-1/2 gap-1">
+      <div className="absolute left-1/2 top-4 z-10 flex w-72 -translate-x-1/2 gap-1.5">
         <Input
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-          placeholder="Search city or lat, lng..."
-          className="h-9 bg-card/90 backdrop-blur-sm text-sm border-border"
+          placeholder="Search address or lat, lng..."
+          className="h-8 glass text-xs placeholder:text-muted-foreground/60 focus-visible:ring-primary/30"
         />
-        <Button size="sm" variant="secondary" onClick={handleSearch} className="h-9 w-9 p-0">
-          <Search className="h-4 w-4" />
+        <Button size="sm" variant="secondary" onClick={handleSearch} className="h-8 w-8 p-0 glass border-border/60 hover:border-primary/40">
+          <Search className="h-3.5 w-3.5" />
         </Button>
       </div>
 
       {/* Fav / Recents icons */}
-      <div className="absolute right-4 top-4 z-10 flex gap-1">
+      <div className="absolute right-4 top-4 z-10 flex gap-1.5">
         <Popover>
           <PopoverTrigger asChild>
-            <Button size="sm" variant="secondary" className="h-9 w-9 p-0">
-              <Star className="h-4 w-4" />
+            <Button size="sm" variant="secondary" className="h-8 w-8 p-0 glass border-border/60 hover:border-primary/40">
+              <Star className="h-3.5 w-3.5" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-64 bg-card border-border p-3" align="end">
-            <h4 className="mb-2 text-xs font-semibold text-primary">Favorites</h4>
+          <PopoverContent className="w-60 glass-strong p-3" align="end">
+            <h4 className="mb-2 text-[11px] font-semibold text-primary tracking-wide uppercase">Favorites</h4>
             {favorites.length === 0 ? (
               <p className="text-xs text-muted-foreground">No favorites yet</p>
             ) : (
-              <ul className="max-h-48 space-y-1 overflow-y-auto">
+              <ul className="max-h-48 space-y-0.5 overflow-y-auto">
                 {favorites.map((f) => (
-                  <li key={f.id} className="flex items-center justify-between rounded px-2 py-1 text-xs hover:bg-secondary cursor-pointer" onClick={() => flyTo(f.lat, f.lng)}>
+                  <li key={f.id} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-xs hover:bg-secondary/60 cursor-pointer transition-colors" onClick={() => flyTo(f.lat, f.lng)}>
                     <span className="truncate text-foreground">{f.label}</span>
-                    <button onClick={(e) => { e.stopPropagation(); onRemoveFavorite(f.id); }} className="ml-1 text-muted-foreground hover:text-destructive">
+                    <button onClick={(e) => { e.stopPropagation(); onRemoveFavorite(f.id); }} className="ml-1 text-muted-foreground hover:text-destructive transition-colors">
                       <Trash2 className="h-3 w-3" />
                     </button>
                   </li>
@@ -270,19 +270,19 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
         </Popover>
         <Popover>
           <PopoverTrigger asChild>
-            <Button size="sm" variant="secondary" className="h-9 w-9 p-0">
-              <Clock className="h-4 w-4" />
+            <Button size="sm" variant="secondary" className="h-8 w-8 p-0 glass border-border/60 hover:border-primary/40">
+              <Clock className="h-3.5 w-3.5" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-64 bg-card border-border p-3" align="end">
-            <h4 className="mb-2 text-xs font-semibold text-primary">Recent Locations</h4>
+          <PopoverContent className="w-60 glass-strong p-3" align="end">
+            <h4 className="mb-2 text-[11px] font-semibold text-primary tracking-wide uppercase">Recent</h4>
             {recents.length === 0 ? (
               <p className="text-xs text-muted-foreground">No recent locations</p>
             ) : (
-              <ul className="max-h-48 space-y-1 overflow-y-auto">
+              <ul className="max-h-48 space-y-0.5 overflow-y-auto">
                 {recents.map((r) => (
-                  <li key={r.id} className="flex items-center gap-2 rounded px-2 py-1 text-xs hover:bg-secondary cursor-pointer text-foreground" onClick={() => flyTo(r.lat, r.lng)}>
-                    <MapPin className="h-3 w-3 text-primary shrink-0" />
+                  <li key={r.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-secondary/60 cursor-pointer text-foreground transition-colors" onClick={() => flyTo(r.lat, r.lng)}>
+                    <MapPin className="h-3 w-3 text-primary/60 shrink-0" />
                     <span className="truncate">{r.label}</span>
                   </li>
                 ))}
@@ -297,17 +297,21 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
 
       {/* Bottom controls */}
       <div className="absolute bottom-4 left-4 right-4 z-10">
-        <div className="rounded-xl border border-border bg-card/95 backdrop-blur-sm p-4 space-y-3">
+        <div className="rounded-2xl glass-strong p-4 space-y-3 shadow-2xl shadow-black/30">
           {/* Coordinates */}
-          <div className="flex items-center gap-3 text-xs">
-            <span className="text-muted-foreground">Lat:</span>
-            <span className="font-mono text-primary">{coords.lat}</span>
-            <span className="text-muted-foreground">Lng:</span>
-            <span className="font-mono text-primary">{coords.lng}</span>
+          <div className="flex items-center gap-2 text-xs">
+            <div className="flex items-center gap-1.5 rounded-md bg-secondary/50 px-2 py-1">
+              <span className="text-muted-foreground text-[10px] uppercase tracking-wider">Lat</span>
+              <span className="font-mono text-primary text-[11px]">{coords.lat}</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-md bg-secondary/50 px-2 py-1">
+              <span className="text-muted-foreground text-[10px] uppercase tracking-wider">Lng</span>
+              <span className="font-mono text-primary text-[11px]">{coords.lng}</span>
+            </div>
             <Button
               size="sm"
               variant="ghost"
-              className="ml-auto h-7 text-xs text-muted-foreground"
+              className="ml-auto h-7 text-[11px] text-muted-foreground hover:text-primary"
               onClick={() => onAddFavorite({ lat: coords.lat, lng: coords.lng, label: `${coords.lat}, ${coords.lng}` })}
             >
               <Star className="h-3 w-3 mr-1" /> Save
@@ -316,53 +320,53 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
 
           {/* Tabs */}
           <Tabs value={mode} onValueChange={(v) => setMode(v as "static" | "route")}>
-            <TabsList className="h-8 bg-secondary">
-              <TabsTrigger value="static" className="text-xs h-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Static</TabsTrigger>
-              <TabsTrigger value="route" className="text-xs h-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Route</TabsTrigger>
+            <TabsList className="h-8 bg-secondary/50 rounded-lg">
+              <TabsTrigger value="static" className="text-[11px] h-6 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:glow-sm">Static</TabsTrigger>
+              <TabsTrigger value="route" className="text-[11px] h-6 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:glow-sm">Route</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="static" className="mt-2">
+            <TabsContent value="static" className="mt-2.5">
               <div className="flex gap-2">
-                <Button onClick={handleSetLocation} disabled={settingLocation} className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 h-9">
-                  {settingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
+                <Button onClick={handleSetLocation} disabled={settingLocation || !canSpoof} className="flex-1 bg-primary text-primary-foreground hover:bg-primary/85 h-9 glow-primary font-medium text-xs">
+                  {settingLocation ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Navigation className="h-3.5 w-3.5" />}
                   Change Location
                 </Button>
                 {locationChanged && (
-                  <Button onClick={handleResetLocation} disabled={resettingLocation} variant="destructive" className="h-9">
-                    {resettingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  <Button onClick={handleResetLocation} disabled={resettingLocation || !canSpoof} variant="destructive" className="h-9 text-xs">
+                    {resettingLocation ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                     Reset
                   </Button>
                 )}
               </div>
             </TabsContent>
 
-            <TabsContent value="route" className="mt-2 space-y-2">
-              <div className="flex gap-2">
-                <Button size="sm" variant="secondary" onClick={addWaypoint} className="text-xs h-8">
-                  <Plus className="h-3 w-3 mr-1" /> Add Waypoint
+            <TabsContent value="route" className="mt-2.5 space-y-2">
+              <div className="flex gap-1.5">
+                <Button size="sm" variant="secondary" onClick={addWaypoint} className="text-[11px] h-8">
+                  <Plus className="h-3 w-3 mr-1" /> Waypoint
                 </Button>
-                <Button size="sm" variant={simulating ? "destructive" : "default"} onClick={toggleSimulation} className="text-xs h-8">
+                <Button size="sm" variant={simulating ? "destructive" : "default"} onClick={toggleSimulation} disabled={!canSpoof} className={`text-[11px] h-8 ${!simulating ? "glow-sm" : ""}`}>
                   {simulating ? <Pause className="h-3 w-3 mr-1" /> : <Play className="h-3 w-3 mr-1" />}
                   {simulating ? "Stop" : "Simulate"}
                 </Button>
                 {waypoints.length > 0 && (
-                  <Button size="sm" variant="ghost" onClick={clearRoute} className="text-xs h-8 text-muted-foreground">
+                  <Button size="sm" variant="ghost" onClick={clearRoute} className="text-[11px] h-8 text-muted-foreground">
                     <Trash2 className="h-3 w-3 mr-1" /> Clear
                   </Button>
                 )}
               </div>
-              <p className="text-[10px] text-muted-foreground">{waypoints.length} waypoint{waypoints.length !== 1 ? "s" : ""} added</p>
+              <p className="text-[10px] text-muted-foreground">{waypoints.length} waypoint{waypoints.length !== 1 ? "s" : ""}</p>
             </TabsContent>
           </Tabs>
 
           {/* Error state */}
           {!canSpoof && (
-            <p className="text-xs text-destructive">
-              {!connected ? "⚠ No device connected." : "⚠ Developer Mode is disabled."} Set/Reset disabled.
+            <p className="text-[11px] text-destructive/90 rounded-md bg-destructive/8 px-2.5 py-1.5">
+              {!connected ? "⚠ No device connected." : "⚠ Developer Mode is disabled."} Actions disabled.
             </p>
           )}
 
-          <p className="text-[10px] text-muted-foreground text-center">For developer/QA testing only.</p>
+          <p className="text-[9px] text-muted-foreground/60 text-center tracking-wide uppercase">For developer/QA testing only</p>
         </div>
       </div>
     </div>

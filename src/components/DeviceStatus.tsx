@@ -1,9 +1,8 @@
-import { useState, useCallback } from "react";
-import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getDeviceStatus, toggleDeviceConnection, toggleDevMode, type DeviceStatus } from "@/lib/mock-api";
-import { RefreshCw, Wifi, WifiOff, ChevronDown, ChevronUp, Cable, Smartphone, ShieldCheck, ShieldAlert } from "lucide-react";
+import { toggleDeviceConnection, toggleDevMode, type DeviceStatus } from "@/lib/mock-api";
+import { RefreshCw, ChevronDown, ChevronUp, Cable, Smartphone, ShieldCheck, ShieldAlert } from "lucide-react";
 
 interface DeviceStatusCardProps {
   status: DeviceStatus | null;
@@ -15,99 +14,103 @@ export function DeviceStatusCard({ status, onRefresh, loading }: DeviceStatusCar
   const [expanded, setExpanded] = useState(false);
   const connected = status?.connected ?? false;
   const devMode = status?.developerMode ?? false;
+
   const dotClass = !connected
-    ? "bg-destructive shadow-[0_0_6px_hsl(0,72%,55%)]"
+    ? "bg-destructive shadow-[0_0_8px_hsl(0,68%,52%)]"
     : !devMode
-      ? "bg-yellow-500 shadow-[0_0_6px_hsl(45,100%,50%)]"
-      : "bg-primary shadow-[0_0_6px_hsl(142,72%,50%)]";
+      ? "bg-[hsl(var(--warning))] shadow-[0_0_8px_hsl(45,93%,47%)]"
+      : "bg-primary shadow-[0_0_8px_hsl(145,72%,46%)]";
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       {/* Compact chip */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm transition-colors hover:bg-secondary"
+        className="flex items-center gap-2.5 rounded-xl glass px-3.5 py-2 text-sm transition-all hover:border-border active:scale-[0.98]"
       >
-        <span className={`h-2.5 w-2.5 rounded-full ${dotClass}`} />
-        <span className="text-foreground">{connected ? status?.name : "No Device"}</span>
-        {expanded ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+        <span className={`h-2 w-2 rounded-full ${dotClass}`} />
+        <span className="text-foreground font-medium text-xs">
+          {connected ? status?.name : "No Device"}
+        </span>
+        {expanded
+          ? <ChevronUp className="h-3 w-3 text-muted-foreground" />
+          : <ChevronDown className="h-3 w-3 text-muted-foreground" />
+        }
       </button>
 
       {/* Expanded card */}
       {expanded && (
-        <Card className="w-72 border-border bg-card shadow-lg">
+        <Card className="w-72 glass-strong shadow-2xl shadow-black/30 animate-fade-in">
           <CardContent className="p-4 space-y-3">
             {connected && status ? (
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Device</span>
-                  <span className="text-foreground">{status.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">iOS</span>
-                  <span className="text-foreground">{status.ios}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Connection</span>
-                  <span className="text-foreground">{status.connection}</span>
-                </div>
+              <div className="space-y-2.5 text-xs">
+                {[
+                  { label: "Device", value: status.name },
+                  { label: "iOS", value: status.ios },
+                  { label: "Connection", value: status.connection },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex justify-between items-center">
+                    <span className="text-muted-foreground">{label}</span>
+                    <span className="text-foreground font-medium">{value}</span>
+                  </div>
+                ))}
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Developer Mode</span>
-                  <span className={devMode ? "text-primary" : "text-yellow-500 flex items-center gap-1"}>
-                    {devMode ? "Enabled" : <><ShieldAlert className="h-3.5 w-3.5" /> Disabled</>}
+                  <span className={`flex items-center gap-1 font-medium ${devMode ? "text-primary" : "text-[hsl(var(--warning))]"}`}>
+                    {devMode ? "Enabled" : <><ShieldAlert className="h-3 w-3" /> Disabled</>}
                   </span>
                 </div>
                 {!devMode && (
-                  <p className="text-[10px] text-yellow-500">⚠ Enable Developer Mode on your device for full functionality.</p>
+                  <p className="text-[10px] text-[hsl(var(--warning))] leading-relaxed rounded-md bg-[hsl(var(--warning)/0.08)] px-2 py-1.5">
+                    ⚠ Enable Developer Mode on your device for full functionality.
+                  </p>
                 )}
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 <p className="text-xs font-medium text-destructive">Connect a device to get started:</p>
-                <ul className="space-y-1.5 text-xs text-muted-foreground">
-                  <li className="flex items-center gap-2">
-                    <Cable className="h-3.5 w-3.5 text-primary" />
-                    Connect iPhone via USB
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Smartphone className="h-3.5 w-3.5 text-primary" />
-                    Tap "Trust this computer"
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-                    Enable Developer Mode
-                  </li>
+                <ul className="space-y-2 text-xs text-muted-foreground">
+                  {[
+                    { icon: Cable, text: "Connect iPhone via USB" },
+                    { icon: Smartphone, text: 'Tap "Trust this computer"' },
+                    { icon: ShieldCheck, text: "Enable Developer Mode" },
+                  ].map(({ icon: Icon, text }) => (
+                    <li key={text} className="flex items-center gap-2.5">
+                      <Icon className="h-3.5 w-3.5 text-primary/70" />
+                      {text}
+                    </li>
+                  ))}
                 </ul>
               </div>
             )}
 
-            <div className="flex gap-2">
+            <div className="flex gap-1.5 pt-0.5">
               <Button
                 size="sm"
                 variant="secondary"
                 onClick={onRefresh}
                 disabled={loading}
-                className="flex-1 text-xs"
+                className="flex-1 text-[11px] h-8"
               >
-                <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+                <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
                 Refresh
               </Button>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => { toggleDeviceConnection(); onRefresh(); }}
-                className="text-xs"
+                className="text-[11px] h-8"
               >
-                {connected ? "Simulate Disconnect" : "Simulate Connect"}
+                {connected ? "Disconnect" : "Connect"}
               </Button>
               {connected && (
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => { toggleDevMode(); onRefresh(); }}
-                  className="text-xs"
+                  className="text-[11px] h-8"
                 >
-                  {devMode ? "Disable Dev" : "Enable Dev"}
+                  {devMode ? "Dev Off" : "Dev On"}
                 </Button>
               )}
             </div>
