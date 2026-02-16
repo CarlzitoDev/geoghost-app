@@ -1,19 +1,28 @@
 import { useState, useCallback, useSyncExternalStore } from "react";
 
+export type TransportMode = "walk" | "bike" | "drive";
+
 export interface AppSettings {
   mapStyle: "dark" | "satellite" | "streets";
   coordinateFormat: "decimal" | "dms";
-  simulationSpeed: number;
+  transportMode: TransportMode;
   autoSaveRecents: boolean;
   maxRecents: number;
 }
+
+/** Speeds in km/h */
+export const TRANSPORT_SPEEDS: Record<TransportMode, { speed: number; label: string; emoji: string }> = {
+  walk: { speed: 5, label: "Walking", emoji: "🚶" },
+  bike: { speed: 15, label: "Cycling", emoji: "🚴" },
+  drive: { speed: 50, label: "Driving", emoji: "🚗" },
+};
 
 const STORAGE_KEY = "geoghost-settings";
 
 const defaultSettings: AppSettings = {
   mapStyle: "dark",
   coordinateFormat: "decimal",
-  simulationSpeed: 1.5,
+  transportMode: "walk",
   autoSaveRecents: true,
   maxRecents: 10,
 };
@@ -21,7 +30,15 @@ const defaultSettings: AppSettings = {
 function loadSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...defaultSettings, ...JSON.parse(raw) };
+    if (raw) {
+      const parsed = { ...defaultSettings, ...JSON.parse(raw) };
+      // Migrate old simulationSpeed setting
+      if ("simulationSpeed" in parsed && !("transportMode" in JSON.parse(raw))) {
+        parsed.transportMode = "walk";
+      }
+      delete (parsed as any).simulationSpeed;
+      return parsed;
+    }
   } catch {}
   return defaultSettings;
 }
