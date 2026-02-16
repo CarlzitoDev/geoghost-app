@@ -4,7 +4,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import {
   Search, Star, Clock, MapPin, Navigation, Play, Pause,
   Trash2, Loader2, Undo2, Pencil, MousePointerClick,
-  Upload, Download,
+  Upload, Download, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -39,9 +39,11 @@ interface MapPanelProps {
   onAddFavorite: (loc: { lat: number; lng: number; label: string }) => void;
   onRemoveFavorite: (id: string) => void;
   onAddRecent: (loc: { lat: number; lng: number; label: string }) => void;
+  onRefreshDevice: () => void;
+  deviceLoading: boolean;
 }
 
-export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRemoveFavorite, onAddRecent }: MapPanelProps) {
+export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRemoveFavorite, onAddRecent, onRefreshDevice, deviceLoading }: MapPanelProps) {
   const { settings } = useSettings();
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -656,77 +658,84 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
   const speed = TRANSPORT_SPEEDS[settings.transportMode].speed;
 
   return (
-    <div className="relative flex-1 overflow-hidden rounded-2xl border border-border/40">
-      {/* Search bar */}
-      <div className="absolute left-1/2 top-4 z-10 flex w-72 -translate-x-1/2 gap-1.5">
-        <Input
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-          placeholder="Search address or lat, lng..."
-          className="h-8 glass text-xs placeholder:text-muted-foreground/60 focus-visible:ring-primary/30"
-        />
-        <Button size="sm" variant="secondary" onClick={handleSearch} className="h-8 w-8 p-0 glass border-border/60 hover:border-primary/40">
-          <Search className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-
-      {/* Fav / Recents icons */}
-      <div className="absolute right-4 top-4 z-10 flex gap-1.5">
+    <div className="relative flex-1 overflow-hidden">
+      {/* ═══ TOP BAR ═══ */}
+      <div className="absolute top-0 left-0 right-0 z-20 flex items-center gap-3 px-4 py-3 bg-background/80 backdrop-blur-xl border-b border-border/30">
+        {/* Device status chip */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button size="sm" variant="secondary" className="h-8 w-8 p-0 glass border-border/60 hover:border-primary/40">
-              <Star className="h-3.5 w-3.5" />
-            </Button>
+            <button className="flex items-center gap-2 rounded-full bg-secondary/60 px-3 py-1.5 text-xs transition-all hover:bg-secondary/80 shrink-0">
+              <span className={`h-2 w-2 rounded-full ${connected ? "bg-primary shadow-[0_0_6px_hsl(145,72%,46%)]" : "bg-destructive shadow-[0_0_6px_hsl(0,68%,52%)]"}`} />
+              <span className="text-foreground font-medium">{connected ? deviceStatus?.name : "No Device"}</span>
+            </button>
           </PopoverTrigger>
-          <PopoverContent className="w-60 glass-strong p-3" align="end">
-            <h4 className="mb-2 text-[11px] font-semibold text-primary tracking-wide uppercase">Favorites</h4>
-            {favorites.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No favorites yet</p>
-            ) : (
-              <ul className="max-h-48 space-y-0.5 overflow-y-auto">
-                {favorites.map((f) => (
-                  <li key={f.id} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-xs hover:bg-secondary/60 cursor-pointer transition-colors" onClick={() => flyTo(f.lat, f.lng)}>
-                    <span className="truncate text-foreground">{f.label}</span>
-                    <button onClick={(e) => { e.stopPropagation(); onRemoveFavorite(f.id); }} className="ml-1 text-muted-foreground hover:text-destructive transition-colors">
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </li>
+          <PopoverContent className="w-64 p-3 bg-popover z-50" align="start">
+            {connected && deviceStatus ? (
+              <div className="space-y-2 text-xs">
+                {[
+                  { label: "Device", value: deviceStatus.name },
+                  { label: "iOS", value: deviceStatus.ios },
+                  { label: "Connection", value: deviceStatus.connection },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex justify-between">
+                    <span className="text-muted-foreground">{label}</span>
+                    <span className="text-foreground font-medium">{value}</span>
+                  </div>
                 ))}
-              </ul>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Developer Mode</span>
+                  <span className={devMode ? "text-primary font-medium" : "text-[hsl(var(--warning))] font-medium"}>
+                    {devMode ? "Enabled" : "Disabled"}
+                  </span>
+                </div>
+                <Button size="sm" variant="secondary" onClick={onRefreshDevice} disabled={deviceLoading} className="w-full h-7 text-[11px] mt-1">
+                  <RefreshCw className={`h-3 w-3 mr-1 ${deviceLoading ? "animate-spin" : ""}`} /> Refresh
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">Connect iPhone via USB, trust the computer, and enable Developer Mode.</p>
+                <Button size="sm" variant="secondary" onClick={onRefreshDevice} disabled={deviceLoading} className="w-full h-7 text-[11px]">
+                  <RefreshCw className={`h-3 w-3 mr-1 ${deviceLoading ? "animate-spin" : ""}`} /> Refresh
+                </Button>
+              </div>
             )}
           </PopoverContent>
         </Popover>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button size="sm" variant="secondary" className="h-8 w-8 p-0 glass border-border/60 hover:border-primary/40">
-              <Clock className="h-3.5 w-3.5" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-60 glass-strong p-3" align="end">
-            <h4 className="mb-2 text-[11px] font-semibold text-primary tracking-wide uppercase">Recent</h4>
-            {recents.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No recent locations</p>
-            ) : (
-              <ul className="max-h-48 space-y-0.5 overflow-y-auto">
-                {recents.map((r) => (
-                  <li key={r.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-secondary/60 cursor-pointer text-foreground transition-colors" onClick={() => flyTo(r.lat, r.lng)}>
-                    <MapPin className="h-3 w-3 text-primary/60 shrink-0" />
-                    <span className="truncate">{r.label}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </PopoverContent>
-        </Popover>
+
+        {/* Search bar — centered */}
+        <div className="flex flex-1 items-center gap-1.5 max-w-md mx-auto">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              placeholder="Type an Address or Location"
+              className="h-8 pl-8 bg-secondary/40 border-border/30 text-xs placeholder:text-muted-foreground/50 focus-visible:ring-primary/30 rounded-full"
+            />
+          </div>
+        </div>
+
+        {/* Mode tabs — right */}
+        <Tabs value={mode} onValueChange={(v) => { setMode(v as "static" | "route"); if (v === "static") clearRoute(); }} className="shrink-0">
+          <TabsList className="h-8 bg-secondary/40 rounded-full">
+            <TabsTrigger value="static" className="text-xs h-6 rounded-full px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              Static
+            </TabsTrigger>
+            <TabsTrigger value="route" className="text-xs h-6 rounded-full px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              Route
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
-      {/* Route mode indicator overlay */}
+      {/* Route mode indicator */}
       {mode === "route" && waypoints.length === 0 && !simulating && (
-        <div className="absolute left-1/2 top-16 z-10 -translate-x-1/2 pointer-events-none">
+        <div className="absolute left-1/2 top-20 z-10 -translate-x-1/2 pointer-events-none">
           <div className="glass-strong rounded-xl px-4 py-2 text-center animate-fade-in">
             <p className="text-xs text-foreground font-medium">
-              {routeMode === "tap" ? "Tap the map to add points to your route" : "Click & drag to draw your route"}
+              {routeMode === "tap" ? "Tap the map to add points" : "Click & drag to draw"}
             </p>
           </div>
         </div>
@@ -734,7 +743,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
 
       {/* Snapping indicator */}
       {isSnapping && (
-        <div className="absolute left-1/2 top-16 z-10 -translate-x-1/2">
+        <div className="absolute left-1/2 top-20 z-10 -translate-x-1/2">
           <div className="glass-strong rounded-lg px-3 py-1.5 flex items-center gap-2 animate-fade-in">
             <Loader2 className="h-3 w-3 animate-spin text-primary" />
             <span className="text-[11px] text-muted-foreground">Snapping to road...</span>
@@ -747,7 +756,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
 
       {/* Route mode floating tools */}
       {mode === "route" && !simulating && (
-        <div className="absolute bottom-[200px] left-1/2 -translate-x-1/2 z-10 flex gap-1.5">
+        <div className="absolute bottom-[140px] left-1/2 -translate-x-1/2 z-10 flex gap-1.5">
           <Button
             size="sm"
             variant={routeMode === "tap" ? "default" : "secondary"}
@@ -761,109 +770,146 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
             size="sm"
             variant={routeMode === "draw" ? "default" : "secondary"}
             onClick={() => setRouteMode("draw")}
-            className={`h-9 w-9 p-0 rounded-full ${routeMode === "draw" ? "glow-sm" : "glass"}`}
+            className={`h-9 w-9 p-0 rounded-full ${routeMode === "draw" ? "glow-sm" : ""}`}
             title="Draw route"
           >
             <Pencil className="h-4 w-4" />
           </Button>
           {undoStack.length > 0 && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={undoLastWaypoint}
-              className="h-9 w-9 p-0 rounded-full glass"
-              title="Undo"
-            >
+            <Button size="sm" variant="secondary" onClick={undoLastWaypoint} className="h-9 w-9 p-0 rounded-full glass" title="Undo">
               <Undo2 className="h-4 w-4" />
             </Button>
           )}
         </div>
       )}
 
-      {/* Bottom controls */}
-      <div className="absolute bottom-4 left-4 right-4 z-10">
-        <div className="rounded-2xl glass-strong p-4 space-y-3 shadow-2xl shadow-black/30">
-          {/* Coordinates row */}
-          <div className="flex items-center gap-2 text-xs">
-            <div className="flex items-center gap-1.5 rounded-md bg-secondary/50 px-2 py-1">
-              <span className="text-muted-foreground text-[10px] uppercase tracking-wider">Lat</span>
-              <span className="font-mono text-primary text-[11px]">{coords.lat}</span>
-            </div>
-            <div className="flex items-center gap-1.5 rounded-md bg-secondary/50 px-2 py-1">
-              <span className="text-muted-foreground text-[10px] uppercase tracking-wider">Lng</span>
-              <span className="font-mono text-primary text-[11px]">{coords.lng}</span>
-            </div>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button size="sm" variant="ghost" className="ml-auto h-7 w-7 p-0 text-muted-foreground hover:text-primary" title="Save to favorites">
-                  <Star className="h-3.5 w-3.5" />
+      {/* ═══ BOTTOM CONTROLS ═══ */}
+      <div className="absolute bottom-0 left-0 right-0 z-10">
+        <div className="bg-background/80 backdrop-blur-xl border-t border-border/30 px-4 py-3 space-y-3">
+
+          {/* Static mode */}
+          {mode === "static" && (
+            <>
+              {/* Bookmark / Recents row */}
+              <div className="flex items-center justify-center gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="h-9 w-9 rounded-full bg-secondary/50 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/70 transition-colors" title="Favorites">
+                      <Star className="h-4 w-4" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-60 p-3 bg-popover z-50" align="center">
+                    <h4 className="mb-2 text-[11px] font-semibold text-primary tracking-wide uppercase">Favorites</h4>
+                    {favorites.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No favorites yet</p>
+                    ) : (
+                      <ul className="max-h-48 space-y-0.5 overflow-y-auto">
+                        {favorites.map((f) => (
+                          <li key={f.id} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-xs hover:bg-secondary/60 cursor-pointer transition-colors" onClick={() => flyTo(f.lat, f.lng)}>
+                            <span className="truncate text-foreground">{f.label}</span>
+                            <button onClick={(e) => { e.stopPropagation(); onRemoveFavorite(f.id); }} className="ml-1 text-muted-foreground hover:text-destructive transition-colors">
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {/* Quick save */}
+                    <div className="mt-2 pt-2 border-t border-border/30 space-y-1.5">
+                      <Input
+                        value={favName}
+                        onChange={(e) => setFavName(e.target.value)}
+                        placeholder="Save current location..."
+                        className="h-7 text-xs bg-secondary/50 border-border/60"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            onAddFavorite({ lat: coords.lat, lng: coords.lng, label: favName.trim() || `${coords.lat}, ${coords.lng}` });
+                            setFavName("");
+                            toast.success("Saved");
+                          }
+                        }}
+                      />
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="h-9 w-9 rounded-full bg-secondary/50 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/70 transition-colors" title="Recent">
+                      <Clock className="h-4 w-4" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-60 p-3 bg-popover z-50" align="center">
+                    <h4 className="mb-2 text-[11px] font-semibold text-primary tracking-wide uppercase">Recent</h4>
+                    {recents.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No recent locations</p>
+                    ) : (
+                      <ul className="max-h-48 space-y-0.5 overflow-y-auto">
+                        {recents.map((r) => (
+                          <li key={r.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-secondary/60 cursor-pointer text-foreground transition-colors" onClick={() => flyTo(r.lat, r.lng)}>
+                            <MapPin className="h-3 w-3 text-primary/60 shrink-0" />
+                            <span className="truncate">{r.label}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Full-width action button */}
+              {locationChanged && !markerMoved ? (
+                /* Reset covers entire area when location is set but marker hasn't moved */
+                <Button
+                  onClick={handleResetLocation}
+                  disabled={resettingLocation || !canSpoof}
+                  variant="secondary"
+                  className="w-full h-11 rounded-full text-sm font-medium bg-secondary/60 hover:bg-secondary/80 border border-border/30"
+                >
+                  {resettingLocation ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Undo2 className="h-4 w-4 mr-2" />}
+                  Reset Location
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56 glass-strong p-3 bg-popover z-50" align="end">
-                <div className="space-y-2">
-                  <p className="text-[11px] font-medium text-foreground">Save to Favorites</p>
-                  <Input
-                    value={favName}
-                    onChange={(e) => setFavName(e.target.value)}
-                    placeholder="Location name..."
-                    className="h-7 text-xs bg-secondary/50 border-border/60"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        onAddFavorite({ lat: coords.lat, lng: coords.lng, label: favName.trim() || `${coords.lat}, ${coords.lng}` });
-                        setFavName("");
-                        toast.success("Saved to favorites");
-                      }
-                    }}
-                  />
-                  <Button
-                    size="sm"
-                    className="w-full h-7 text-[11px]"
-                    onClick={() => {
-                      onAddFavorite({ lat: coords.lat, lng: coords.lng, label: favName.trim() || `${coords.lat}, ${coords.lng}` });
-                      setFavName("");
-                      toast.success("Saved to favorites");
-                    }}
-                  >
-                    Save
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-
-          {/* Mode tabs + actions */}
-          <Tabs value={mode} onValueChange={(v) => { setMode(v as "static" | "route"); if (v === "static") clearRoute(); }}>
-            <TabsList className="h-8 bg-secondary/50 rounded-lg w-full">
-              <TabsTrigger value="static" className="flex-1 text-[11px] h-6 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:glow-sm">
-                <MapPin className="h-3 w-3 mr-1" /> Static
-              </TabsTrigger>
-              <TabsTrigger value="route" className="flex-1 text-[11px] h-6 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:glow-sm">
-                <Navigation className="h-3 w-3 mr-1" /> Route
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="static" className="mt-2.5">
-              {!markerMoved && !locationChanged ? (
-                <div className="flex items-center gap-2 h-9 px-3 rounded-lg bg-secondary/50 border border-border/40">
-                  <MapPin className="h-3.5 w-3.5 text-primary" />
-                  <span className="text-xs text-muted-foreground">iPhone at current location</span>
-                </div>
-              ) : (
+              ) : markerMoved || locationChanged ? (
                 <div className="flex gap-2">
-                  <Button onClick={handleSetLocation} disabled={settingLocation || !canSpoof} className="flex-1 bg-primary text-primary-foreground hover:bg-primary/85 h-9 glow-primary font-medium text-xs">
-                    {settingLocation ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Navigation className="h-3.5 w-3.5" />}
-                    Set Location
+                  <Button
+                    onClick={handleSetLocation}
+                    disabled={settingLocation || !canSpoof}
+                    className="flex-1 h-11 rounded-full bg-primary/20 text-primary hover:bg-primary/30 border border-primary/30 text-sm font-medium"
+                  >
+                    {settingLocation ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Change Location
                   </Button>
                   {locationChanged && (
-                    <Button onClick={handleResetLocation} disabled={resettingLocation || !canSpoof} variant="destructive" className="h-9 text-xs px-3">
-                      {resettingLocation ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Reset"}
+                    <Button
+                      onClick={handleResetLocation}
+                      disabled={resettingLocation || !canSpoof}
+                      variant="secondary"
+                      className="h-11 rounded-full px-4 bg-secondary/60 hover:bg-secondary/80 border border-border/30"
+                    >
+                      {resettingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
                     </Button>
                   )}
                 </div>
+              ) : (
+                <Button
+                  disabled
+                  className="w-full h-11 rounded-full bg-secondary/40 text-muted-foreground border border-border/20 text-sm font-medium cursor-default"
+                >
+                  Change Location
+                </Button>
               )}
-            </TabsContent>
 
-            <TabsContent value="route" className="mt-2.5 space-y-2.5">
+              {/* Coordinates */}
+              <div className="flex items-center justify-center gap-3 text-[10px] text-muted-foreground">
+                <span className="font-mono">{coords.lat.toFixed(6)}</span>
+                <span>,</span>
+                <span className="font-mono">{coords.lng.toFixed(6)}</span>
+              </div>
+            </>
+          )}
+
+          {/* Route mode */}
+          {mode === "route" && (
+            <>
               {/* Simulation progress */}
               {simulating && (
                 <div className="space-y-1">
@@ -877,7 +923,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
 
               {/* Stats bar */}
               {waypoints.length >= 2 && !simulating && (
-                <div className="flex items-center gap-3 rounded-lg bg-secondary/40 px-3 py-2">
+                <div className="flex items-center gap-3 rounded-lg bg-secondary/30 px-3 py-2">
                   <div className="text-center flex-1">
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Distance</p>
                     <p className="text-sm font-semibold text-foreground">{formatDistance(totalKm)}</p>
@@ -895,43 +941,36 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
                 </div>
               )}
 
-              {/* Main action row */}
-              <div className="flex gap-1.5">
+              {/* Action row */}
+              <div className="flex gap-2">
                 <Button
                   size="sm"
                   variant={simulating ? "destructive" : "default"}
                   onClick={toggleSimulation}
                   disabled={!canSpoof || waypoints.length < 2}
-                  className={`flex-1 text-[11px] h-9 ${!simulating ? "glow-sm" : ""}`}
+                  className={`flex-1 h-11 rounded-full text-sm font-medium ${!simulating ? "bg-primary/20 text-primary hover:bg-primary/30 border border-primary/30" : ""}`}
                 >
-                  {simulating ? <Pause className="h-3.5 w-3.5 mr-1" /> : <Play className="h-3.5 w-3.5 mr-1" />}
-                  {simulating ? "Stop" : "Simulate"}
+                  {simulating ? <Pause className="h-4 w-4 mr-1.5" /> : <Play className="h-4 w-4 mr-1.5" />}
+                  {simulating ? "Stop" : "Simulate Route"}
                 </Button>
                 {waypoints.length > 0 && !simulating && (
-                  <Button size="sm" variant="ghost" onClick={clearRoute} className="text-[11px] h-9 text-muted-foreground hover:text-destructive px-3">
-                    <Trash2 className="h-3.5 w-3.5" />
+                  <Button size="sm" variant="secondary" onClick={clearRoute} className="h-11 w-11 rounded-full p-0 bg-secondary/50 hover:bg-secondary/70">
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 )}
                 {!simulating && (
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button size="sm" variant="secondary" className="text-[11px] h-9 px-3 bg-secondary/50">
+                      <Button size="sm" variant="secondary" className="h-11 rounded-full px-4 bg-secondary/50 text-xs">
                         GPX
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-40 p-1.5 bg-popover z-50" align="end">
                       <input ref={gpxInputRef} type="file" accept=".gpx" className="hidden" onChange={handleGpxImport} />
-                      <button
-                        onClick={() => gpxInputRef.current?.click()}
-                        className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-foreground hover:bg-secondary/60 transition-colors"
-                      >
+                      <button onClick={() => gpxInputRef.current?.click()} className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-foreground hover:bg-secondary/60 transition-colors">
                         <Upload className="h-3 w-3" /> Import
                       </button>
-                      <button
-                        onClick={handleGpxExport}
-                        disabled={waypoints.length < 2}
-                        className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-foreground hover:bg-secondary/60 transition-colors disabled:opacity-40"
-                      >
+                      <button onClick={handleGpxExport} disabled={waypoints.length < 2} className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-foreground hover:bg-secondary/60 transition-colors disabled:opacity-40">
                         <Download className="h-3 w-3" /> Export
                       </button>
                     </PopoverContent>
@@ -944,23 +983,23 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
                   {waypoints.length} point{waypoints.length !== 1 ? "s" : ""} · snapped to roads
                 </p>
               )}
-            </TabsContent>
-          </Tabs>
+            </>
+          )}
 
           {/* Error state */}
           {!canSpoof && (
-            <p className="text-[11px] text-destructive/90 rounded-md bg-destructive/8 px-2.5 py-1.5 text-center">
+            <p className="text-[11px] text-destructive/90 text-center">
               {!connected ? "No device connected" : "Developer Mode disabled"}
             </p>
           )}
         </div>
       </div>
+
       <SudoPasswordDialog
         open={showPasswordDialog}
         onOpenChange={(open) => {
           setShowPasswordDialog(open);
           if (!open) {
-            // Trigger cancel
             const cancel = (window as any).__tunneldCancel;
             if (cancel) { cancel(false); delete (window as any).__tunneldCancel; }
             setPendingLocationAction(null);
