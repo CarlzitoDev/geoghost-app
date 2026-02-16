@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { AppSidebar } from "@/components/AppSidebar";
 import { DeviceStatusCard } from "@/components/DeviceStatus";
 import { MapPanel } from "@/components/MapPanel";
-import { getDeviceStatus, type DeviceStatus } from "@/lib/mock-api";
+import { getDeviceStatus, type DeviceStatus } from "@/lib/device-api";
 import { useFavorites, useRecents } from "@/hooks/use-location-storage";
 import { useSettings } from "@/hooks/use-settings";
 

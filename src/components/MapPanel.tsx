@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { setLocation, resetLocation, type DeviceStatus } from "@/lib/mock-api";
+import { setLocation, resetLocation, type DeviceStatus } from "@/lib/device-api";
 import { type SavedLocation } from "@/hooks/use-location-storage";
 import { useSettings, TRANSPORT_SPEEDS } from "@/hooks/use-settings";
 import {

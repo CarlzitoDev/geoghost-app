@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { toggleDeviceConnection, toggleDevMode, type DeviceStatus } from "@/lib/mock-api";
+import { toggleDeviceConnection, toggleDevMode, type DeviceStatus } from "@/lib/device-api";
 import { RefreshCw, ChevronDown, ChevronUp, Cable, Smartphone, ShieldCheck, ShieldAlert } from "lucide-react";
 
 interface DeviceStatusCardProps {
