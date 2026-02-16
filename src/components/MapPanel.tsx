@@ -53,6 +53,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
   const [resettingLocation, setResettingLocation] = useState(false);
   const [locationChanged, setLocationChanged] = useState(false);
   const [mode, setMode] = useState<"static" | "route">("static");
+  const [favName, setFavName] = useState("");
 
   // Route state
   const [routeMode, setRouteMode] = useState<"tap" | "draw">("tap");
@@ -710,14 +711,46 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
               <span className="text-muted-foreground text-[10px] uppercase tracking-wider">Lng</span>
               <span className="font-mono text-primary text-[11px]">{coords.lng}</span>
             </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="ml-auto h-7 text-[11px] text-muted-foreground hover:text-primary"
-              onClick={() => onAddFavorite({ lat: coords.lat, lng: coords.lng, label: `${coords.lat}, ${coords.lng}` })}
-            >
-              <Star className="h-3 w-3 mr-1" /> Save
-            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="ml-auto h-7 text-[11px] text-muted-foreground hover:text-primary"
+                >
+                  <Star className="h-3 w-3 mr-1" /> Save
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 glass-strong p-3" align="end">
+                <div className="space-y-2">
+                  <p className="text-[11px] font-medium text-foreground">Save to Favorites</p>
+                  <Input
+                    value={favName}
+                    onChange={(e) => setFavName(e.target.value)}
+                    placeholder="Location name..."
+                    className="h-7 text-xs bg-secondary/50 border-border/60"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        onAddFavorite({ lat: coords.lat, lng: coords.lng, label: favName.trim() || `${coords.lat}, ${coords.lng}` });
+                        setFavName("");
+                        toast.success("Saved to favorites");
+                      }
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    className="w-full h-7 text-[11px]"
+                    onClick={() => {
+                      onAddFavorite({ lat: coords.lat, lng: coords.lng, label: favName.trim() || `${coords.lat}, ${coords.lng}` });
+                      setFavName("");
+                      toast.success("Saved to favorites");
+                    }}
+                  >
+                    Save
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Tabs */}
