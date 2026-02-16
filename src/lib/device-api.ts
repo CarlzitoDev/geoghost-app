@@ -14,6 +14,8 @@ interface ElectronAPI {
   getDeviceStatus: () => Promise<DeviceStatus>;
   setLocation: (lat: number, lng: number) => Promise<{ ok: boolean; error?: string }>;
   resetLocation: () => Promise<{ ok: boolean; error?: string }>;
+  startTunnel: () => Promise<{ ok: boolean; host?: string; port?: string; error?: string }>;
+  getTunnelStatus: () => Promise<{ active: boolean; host: string | null; port: string | null }>;
 }
 
 declare global {
