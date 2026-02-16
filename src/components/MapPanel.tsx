@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { setLocation, resetLocation, getDeviceLocation, type DeviceStatus } from "@/lib/device-api";
+import { setLocation, resetLocation, type DeviceStatus } from "@/lib/device-api";
 import { type SavedLocation } from "@/hooks/use-location-storage";
 import { useSettings, TRANSPORT_SPEEDS } from "@/hooks/use-settings";
 import {
@@ -48,6 +48,8 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
   const routeMarkersRef = useRef<mapboxgl.Marker[]>([]);
 
   const [coords, setCoords] = useState<Waypoint>({ lat: 37.7749, lng: -122.4194 });
+  const [initialCoords, setInitialCoords] = useState<Waypoint | null>(null);
+  const [markerMoved, setMarkerMoved] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [settingLocation, setSettingLocation] = useState(false);
   const [resettingLocation, setResettingLocation] = useState(false);
@@ -95,31 +97,34 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     marker.on("dragend", () => {
       const lngLat = marker.getLngLat();
       setCoords({ lat: parseFloat(lngLat.lat.toFixed(6)), lng: parseFloat(lngLat.lng.toFixed(6)) });
+      setMarkerMoved(true);
     });
 
     mapRef.current = map;
     markerRef.current = marker;
 
-    // Center map on device location (Electron) or browser geolocation (web)
+    // Center map on user's real location via browser geolocation
     const centerOnLocation = (lat: number, lng: number) => {
       const pos: [number, number] = [lng, lat];
       map.flyTo({ center: pos, zoom: 13 });
       marker.setLngLat(pos);
-      setCoords({ lat: parseFloat(lat.toFixed(6)), lng: parseFloat(lng.toFixed(6)) });
+      const wp = { lat: parseFloat(lat.toFixed(6)), lng: parseFloat(lng.toFixed(6)) };
+      setCoords(wp);
+      setInitialCoords(wp);
+      setMarkerMoved(false);
     };
 
-    // Try phone location first (Electron), fall back to browser geolocation
-    getDeviceLocation().then((res) => {
-      if (res.ok && res.lat !== undefined && res.lng !== undefined) {
-        centerOnLocation(res.lat, res.lng);
-      } else if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => centerOnLocation(position.coords.latitude, position.coords.longitude),
-          () => { /* keep default */ },
-          { enableHighAccuracy: false, timeout: 5000 }
-        );
-      }
-    });
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => centerOnLocation(position.coords.latitude, position.coords.longitude),
+        () => {
+          setInitialCoords({ lat: 37.7749, lng: -122.4194 });
+        },
+        { enableHighAccuracy: false, timeout: 5000 }
+      );
+    } else {
+      setInitialCoords({ lat: 37.7749, lng: -122.4194 });
+    }
 
     return () => { map.remove(); mapRef.current = null; };
   }, []);
@@ -147,6 +152,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
       const { lat, lng } = e.lngLat;
       const point: Waypoint = { lat: parseFloat(lat.toFixed(6)), lng: parseFloat(lng.toFixed(6)) };
       setCoords(point);
+      setMarkerMoved(true);
       markerRef.current?.setLngLat([point.lng, point.lat]);
     };
 
@@ -423,20 +429,18 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     if (res.ok) {
       toast.success("Location reset");
       setLocationChanged(false);
-      // Fly back to the phone's real location
-      try {
-        const loc = await getDeviceLocation();
-        if (loc.ok && loc.lat !== undefined && loc.lng !== undefined) {
-          const pos: [number, number] = [loc.lng, loc.lat];
-          mapRef.current?.flyTo({ center: pos, zoom: 13 });
-          markerRef.current?.setLngLat(pos);
-          setCoords({ lat: parseFloat(loc.lat.toFixed(6)), lng: parseFloat(loc.lng.toFixed(6)) });
-        }
-      } catch { /* ignore */ }
+      setMarkerMoved(false);
+      // Fly back to initial location
+      if (initialCoords) {
+        const pos: [number, number] = [initialCoords.lng, initialCoords.lat];
+        mapRef.current?.flyTo({ center: pos, zoom: 13 });
+        markerRef.current?.setLngLat(pos);
+        setCoords(initialCoords);
+      }
     } else {
       toast.error(res.error || "Failed to reset location");
     }
-  }, [connected, canSpoof]);
+  }, [connected, canSpoof, initialCoords]);
 
   const clearRoute = useCallback(() => {
     routeMarkersRef.current.forEach((m) => m.remove());
@@ -792,18 +796,25 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
             </TabsList>
 
             <TabsContent value="static" className="mt-2.5">
-              <div className="flex gap-2">
-                <Button onClick={handleSetLocation} disabled={settingLocation || !canSpoof} className="flex-1 bg-primary text-primary-foreground hover:bg-primary/85 h-9 glow-primary font-medium text-xs">
-                  {settingLocation ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Navigation className="h-3.5 w-3.5" />}
-                  Change Location
-                </Button>
-                {locationChanged && (
-                  <Button onClick={handleResetLocation} disabled={resettingLocation || !canSpoof} variant="destructive" className="h-9 text-xs">
-                    {resettingLocation ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                    Reset
+              {!markerMoved && !locationChanged ? (
+                <div className="flex items-center gap-2 h-9 px-3 rounded-lg bg-secondary/50 border border-border/40">
+                  <MapPin className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-xs text-muted-foreground">iPhone at current location</span>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Button onClick={handleSetLocation} disabled={settingLocation || !canSpoof} className="flex-1 bg-primary text-primary-foreground hover:bg-primary/85 h-9 glow-primary font-medium text-xs">
+                    {settingLocation ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Navigation className="h-3.5 w-3.5" />}
+                    Change Location
                   </Button>
-                )}
-              </div>
+                  {locationChanged && (
+                    <Button onClick={handleResetLocation} disabled={resettingLocation || !canSpoof} variant="destructive" className="h-9 text-xs">
+                      {resettingLocation ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                      Reset
+                    </Button>
+                  )}
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="route" className="mt-2.5 space-y-2.5">
