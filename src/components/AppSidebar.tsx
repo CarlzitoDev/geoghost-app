@@ -14,9 +14,6 @@ export function AppSidebar() {
         {/* Logo */}
         <div className="mb-10 flex flex-col items-center gap-1.5">
           <img src={geoghostLogo} alt="geoghost" className="h-9 w-9 rounded-lg" />
-          <span className="text-[8px] font-semibold uppercase tracking-[0.2em] text-primary/70 text-glow">
-            geoghost
-          </span>
         </div>
 
         {/* Nav items */}
