@@ -243,38 +243,56 @@ ipcMain.handle("tunnel:status", async () => {
 
 // Set simulated location — tries tunnel (iOS 17+) first, falls back to legacy
 ipcMain.handle("location:set", async (_event, { lat, lng }) => {
-  // Try with tunnel first (iOS 17+)
+  console.log(`[geoghost] location:set called with lat=${lat}, lng=${lng}`);
+  console.log(`[geoghost] Current tunnel state: rsdHost=${rsdHost}, rsdPort=${rsdPort}, tunnelProcess=${!!tunnelProcess}`);
+
+  // Try with existing tunnel first (iOS 17+)
   if (rsdHost && rsdPort) {
     try {
-      await run(`pymobiledevice3 developer dvt simulate-location set --rsd ${rsdHost} ${rsdPort} -- ${lat} ${lng}`);
-      return { ok: true };
+      const cmd = `pymobiledevice3 developer dvt simulate-location set --rsd ${rsdHost} ${rsdPort} -- ${lat} ${lng}`;
+      console.log(`[geoghost] Trying RSD: ${cmd}`);
+      const output = await run(cmd);
+      console.log(`[geoghost] RSD success, output: "${output}"`);
+      return { ok: true, method: "rsd-tunnel" };
     } catch (err) {
-      console.error("RSD simulate-location failed:", err.message);
-      // Fall through to legacy
+      console.error("[geoghost] RSD simulate-location failed:", err.message);
     }
   }
 
   // Try starting tunnel automatically
   try {
+    console.log("[geoghost] Attempting to start tunnel...");
     const tunnel = await startTunnel();
-    await run(`pymobiledevice3 developer dvt simulate-location set --rsd ${tunnel.host} ${tunnel.port} -- ${lat} ${lng}`);
-    return { ok: true };
+    const cmd = `pymobiledevice3 developer dvt simulate-location set --rsd ${tunnel.host} ${tunnel.port} -- ${lat} ${lng}`;
+    console.log(`[geoghost] Trying new tunnel: ${cmd}`);
+    const output = await run(cmd);
+    console.log(`[geoghost] New tunnel success, output: "${output}"`);
+    return { ok: true, method: "new-tunnel" };
   } catch (err) {
-    console.error("Tunnel simulate-location failed:", err.message);
+    console.error("[geoghost] Tunnel simulate-location failed:", err.message);
   }
 
   // Legacy fallback (iOS < 17)
-  try {
-    await run(`pymobiledevice3 developer dvt simulate-location set -- ${lat} ${lng}`);
-    return { ok: true };
-  } catch {
+  const legacyCmds = [
+    `pymobiledevice3 developer dvt simulate-location set -- ${lat} ${lng}`,
+    `pymobiledevice3 developer simulate-location set -- ${lat} ${lng}`,
+  ];
+
+  for (const cmd of legacyCmds) {
     try {
-      await run(`pymobiledevice3 developer simulate-location set -- ${lat} ${lng}`);
-      return { ok: true };
+      console.log(`[geoghost] Trying legacy: ${cmd}`);
+      const output = await run(cmd);
+      console.log(`[geoghost] Legacy success, output: "${output}"`);
+      return { ok: true, method: "legacy" };
     } catch (err) {
-      return { ok: false, error: `Failed to set location. For iOS 17+, try running manually:\nsudo pymobiledevice3 remote start-tunnel\nThen retry in the app.` };
+      console.error(`[geoghost] Legacy failed: ${err.message}`);
     }
   }
+
+  return {
+    ok: false,
+    error: `All methods failed. For iOS 17+, try running in a separate terminal:\nsudo pymobiledevice3 remote start-tunnel\nThen retry in the app.`,
+  };
 });
 
 // Reset (clear) simulated location
