@@ -4,86 +4,125 @@
 
 @layer base {
   :root {
-    --background: 225 20% 7%;
+    --background: 0 0% 3%;
     --foreground: 150 10% 92%;
 
-    --card: 225 18% 11%;
+    --card: 0 0% 6%;
     --card-foreground: 150 10% 92%;
 
-    --popover: 225 18% 11%;
+    --popover: 0 0% 6%;
     --popover-foreground: 150 10% 92%;
 
     --primary: 145 72% 46%;
-    --primary-foreground: 225 25% 5%;
+    --primary-foreground: 0 0% 3%;
 
-    --secondary: 225 14% 15%;
+    --secondary: 0 0% 10%;
     --secondary-foreground: 150 10% 80%;
 
-    --muted: 225 12% 14%;
-    --muted-foreground: 225 8% 50%;
+    --muted: 0 0% 9%;
+    --muted-foreground: 0 0% 45%;
 
     --accent: 145 72% 46%;
-    --accent-foreground: 225 25% 5%;
+    --accent-foreground: 0 0% 3%;
 
     --destructive: 0 68% 52%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 225 12% 16%;
-    --input: 225 12% 16%;
+    --border: 0 0% 12%;
+    --input: 0 0% 12%;
     --ring: 145 72% 46%;
 
     --radius: 0.625rem;
 
-    --sidebar-background: 225 22% 6%;
-    --sidebar-foreground: 225 8% 48%;
+    --sidebar-background: 0 0% 4%;
+    --sidebar-foreground: 0 0% 45%;
     --sidebar-primary: 145 72% 46%;
-    --sidebar-primary-foreground: 225 25% 5%;
-    --sidebar-accent: 225 14% 12%;
+    --sidebar-primary-foreground: 0 0% 3%;
+    --sidebar-accent: 0 0% 8%;
     --sidebar-accent-foreground: 150 10% 88%;
-    --sidebar-border: 225 12% 13%;
+    --sidebar-border: 0 0% 10%;
     --sidebar-ring: 145 72% 46%;
 
     --ghost-glow: 145 72% 46%;
     --warning: 45 93% 47%;
   }
 
-  .dark {
-    --background: 225 20% 7%;
-    --foreground: 150 10% 92%;
+  /* Satellite map style — warm earthy tones */
+  [data-map-style="satellite"] {
+    --background: 30 10% 5%;
+    --foreground: 40 15% 90%;
 
-    --card: 225 18% 11%;
-    --card-foreground: 150 10% 92%;
+    --card: 30 8% 8%;
+    --card-foreground: 40 15% 90%;
 
-    --popover: 225 18% 11%;
-    --popover-foreground: 150 10% 92%;
+    --popover: 30 8% 8%;
+    --popover-foreground: 40 15% 90%;
 
-    --primary: 145 72% 46%;
-    --primary-foreground: 225 25% 5%;
+    --primary: 45 90% 50%;
+    --primary-foreground: 30 10% 5%;
 
-    --secondary: 225 14% 15%;
-    --secondary-foreground: 150 10% 80%;
+    --secondary: 30 6% 12%;
+    --secondary-foreground: 40 10% 75%;
 
-    --muted: 225 12% 14%;
-    --muted-foreground: 225 8% 50%;
+    --muted: 30 5% 10%;
+    --muted-foreground: 30 5% 45%;
 
-    --accent: 145 72% 46%;
-    --accent-foreground: 225 25% 5%;
+    --accent: 45 90% 50%;
+    --accent-foreground: 30 10% 5%;
 
-    --destructive: 0 68% 52%;
-    --destructive-foreground: 0 0% 100%;
+    --border: 30 5% 14%;
+    --input: 30 5% 14%;
+    --ring: 45 90% 50%;
 
-    --border: 225 12% 16%;
-    --input: 225 12% 16%;
-    --ring: 145 72% 46%;
+    --sidebar-background: 30 10% 4%;
+    --sidebar-foreground: 30 5% 45%;
+    --sidebar-primary: 45 90% 50%;
+    --sidebar-primary-foreground: 30 10% 5%;
+    --sidebar-accent: 30 6% 10%;
+    --sidebar-accent-foreground: 40 10% 85%;
+    --sidebar-border: 30 5% 12%;
+    --sidebar-ring: 45 90% 50%;
 
-    --sidebar-background: 225 22% 6%;
-    --sidebar-foreground: 225 8% 48%;
-    --sidebar-primary: 145 72% 46%;
-    --sidebar-primary-foreground: 225 25% 5%;
-    --sidebar-accent: 225 14% 12%;
-    --sidebar-accent-foreground: 150 10% 88%;
-    --sidebar-border: 225 12% 13%;
-    --sidebar-ring: 145 72% 46%;
+    --ghost-glow: 45 90% 50%;
+  }
+
+  /* Streets map style — clean blue accent */
+  [data-map-style="streets"] {
+    --background: 220 15% 6%;
+    --foreground: 210 10% 92%;
+
+    --card: 220 12% 9%;
+    --card-foreground: 210 10% 92%;
+
+    --popover: 220 12% 9%;
+    --popover-foreground: 210 10% 92%;
+
+    --primary: 210 90% 56%;
+    --primary-foreground: 220 15% 4%;
+
+    --secondary: 220 10% 13%;
+    --secondary-foreground: 210 10% 78%;
+
+    --muted: 220 8% 11%;
+    --muted-foreground: 220 6% 46%;
+
+    --accent: 210 90% 56%;
+    --accent-foreground: 220 15% 4%;
+
+    --border: 220 8% 15%;
+    --input: 220 8% 15%;
+    --ring: 210 90% 56%;
+
+    --sidebar-background: 220 15% 5%;
+    --sidebar-foreground: 220 6% 46%;
+    --sidebar-primary: 210 90% 56%;
+    --sidebar-primary-foreground: 220 15% 4%;
+    --sidebar-accent: 220 10% 10%;
+    --sidebar-accent-foreground: 210 10% 86%;
+    --sidebar-border: 220 8% 12%;
+    --sidebar-ring: 210 90% 56%;
+
+    --ghost-glow: 210 90% 56%;
   }
 }
 
@@ -95,6 +134,7 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 }
 
@@ -127,15 +167,15 @@
 }
 
 .mapboxgl-ctrl-group {
-  background: hsl(225 18% 11% / 0.9) !important;
+  background: hsl(var(--card) / 0.9) !important;
   backdrop-filter: blur(12px) !important;
-  border: 1px solid hsl(225 12% 16%) !important;
+  border: 1px solid hsl(var(--border)) !important;
   border-radius: 0.5rem !important;
   overflow: hidden;
 }
 
 .mapboxgl-ctrl-group button {
-  border-bottom: 1px solid hsl(225 12% 16% / 0.5) !important;
+  border-bottom: 1px solid hsl(var(--border) / 0.5) !important;
 }
 
 .mapboxgl-ctrl-group button + button {
@@ -147,17 +187,17 @@
 }
 
 .mapboxgl-popup-content {
-  background: hsl(225 18% 11% / 0.95) !important;
-  color: hsl(150 10% 92%) !important;
+  background: hsl(var(--card) / 0.95) !important;
+  color: hsl(var(--foreground)) !important;
   border-radius: 0.5rem !important;
   padding: 0.5rem 0.75rem !important;
   font-size: 0.8rem !important;
-  border: 1px solid hsl(225 12% 16%) !important;
+  border: 1px solid hsl(var(--border)) !important;
   backdrop-filter: blur(12px) !important;
 }
 
 .mapboxgl-popup-tip {
-  border-top-color: hsl(225 18% 11% / 0.95) !important;
+  border-top-color: hsl(var(--card) / 0.95) !important;
 }
 
 /* Custom scrollbar */
@@ -168,11 +208,11 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: hsl(225 12% 20%);
+  background: hsl(var(--border));
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(225 12% 28%);
+  background: hsl(var(--muted-foreground));
 }
 
 /* Smooth transitions */
