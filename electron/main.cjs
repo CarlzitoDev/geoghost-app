@@ -158,6 +158,78 @@ function startTunnel() {
   });
 }
 
+// ─── Helper: get device UDID ───
+let cachedUDID = null;
+
+async function getDeviceUDID() {
+  if (cachedUDID) return cachedUDID;
+  try {
+    const output = await run("pymobiledevice3 usbmux list --no-color -o json");
+    const devices = JSON.parse(output);
+    const list = Array.isArray(devices) ? devices : [devices];
+    if (list.length > 0) {
+      cachedUDID = list[0].UniqueDeviceID || list[0].SerialNumber || list[0].UDID || null;
+      return cachedUDID;
+    }
+  } catch {}
+  return null;
+}
+
+// ─── Helper: discover external tunnel RSD params ───
+async function discoverExternalTunnel() {
+  // Try querying tunneld HTTP API (if user runs `pymobiledevice3 remote tunneld`)
+  try {
+    const http = require("http");
+    const data = await new Promise((resolve, reject) => {
+      const req = http.get("http://127.0.0.1:49151/tunnels", { timeout: 2000 }, (res) => {
+        let body = "";
+        res.on("data", (chunk) => body += chunk);
+        res.on("end", () => resolve(body));
+      });
+      req.on("error", reject);
+      req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); });
+    });
+    const tunnels = JSON.parse(data);
+    // tunneld returns a list/dict of active tunnels with host/port
+    if (Array.isArray(tunnels) && tunnels.length > 0) {
+      const t = tunnels[0];
+      if (t.address && t.port) {
+        console.log(`[geoghost] Discovered tunnel via tunneld: ${t.address} ${t.port}`);
+        return { host: t.address, port: t.port };
+      }
+    } else if (tunnels && typeof tunnels === "object") {
+      const keys = Object.keys(tunnels);
+      if (keys.length > 0) {
+        const t = tunnels[keys[0]];
+        if (t && t.address && t.port) {
+          console.log(`[geoghost] Discovered tunnel via tunneld: ${t.address} ${t.port}`);
+          return { host: t.address, port: t.port };
+        }
+      }
+    }
+  } catch (err) {
+    console.log("[geoghost] tunneld not running or not responding:", err.message);
+  }
+
+  // Try parsing network interfaces for fd-prefixed IPv6 on utun (external start-tunnel)
+  try {
+    const ifOutput = await run("ifconfig", 5000);
+    const utunBlocks = ifOutput.split(/(?=^utun)/m);
+    for (const block of utunBlocks) {
+      if (!block.startsWith("utun")) continue;
+      const fdMatch = block.match(/inet6\s+(fd[0-9a-f:]+)\s/i);
+      if (fdMatch) {
+        console.log(`[geoghost] Found potential tunnel interface: ${fdMatch[1]}`);
+        // We have the address but not the port — we can't use this alone
+        // Store for informational purposes
+        return { host: fdMatch[1], port: null };
+      }
+    }
+  } catch {}
+
+  return null;
+}
+
 // ─── IPC Handlers ───
 
 ipcMain.handle("device:status", async () => {
@@ -203,6 +275,8 @@ ipcMain.handle("device:status", async () => {
     }
 
     const device = deviceList[0];
+    // Cache UDID for tunnel discovery
+    cachedUDID = device.UniqueDeviceID || device.SerialNumber || device.UDID || null;
     return {
       connected: true,
       name: device.DeviceName || device.ProductType || device.Name || "iOS Device",
@@ -259,9 +333,41 @@ ipcMain.handle("location:set", async (_event, { lat, lng }) => {
     }
   }
 
-  // Try starting tunnel automatically
+  // Try discovering external tunnel (tunneld or start-tunnel)
   try {
-    console.log("[geoghost] Attempting to start tunnel...");
+    console.log("[geoghost] Trying to discover external tunnel...");
+    const discovered = await discoverExternalTunnel();
+    if (discovered && discovered.host && discovered.port) {
+      const cmd = `pymobiledevice3 developer dvt simulate-location set --rsd ${discovered.host} ${discovered.port} -- ${lat} ${lng}`;
+      console.log(`[geoghost] Trying discovered tunnel: ${cmd}`);
+      const output = await run(cmd);
+      console.log(`[geoghost] Discovered tunnel success, output: "${output}"`);
+      // Cache for future use
+      rsdHost = discovered.host;
+      rsdPort = discovered.port;
+      return { ok: true, method: "discovered-tunnel" };
+    }
+  } catch (err) {
+    console.error("[geoghost] Discovered tunnel failed:", err.message);
+  }
+
+  // Try --tunnel UDID (works with tunneld daemon)
+  try {
+    const udid = await getDeviceUDID();
+    if (udid) {
+      const cmd = `pymobiledevice3 developer dvt simulate-location set --tunnel ${udid} -- ${lat} ${lng}`;
+      console.log(`[geoghost] Trying --tunnel ${udid}: ${cmd}`);
+      const output = await run(cmd, 20000);
+      console.log(`[geoghost] --tunnel success, output: "${output}"`);
+      return { ok: true, method: "tunnel-udid" };
+    }
+  } catch (err) {
+    console.error("[geoghost] --tunnel UDID failed:", err.message);
+  }
+
+  // Try starting tunnel automatically (needs sudo, likely fails)
+  try {
+    console.log("[geoghost] Attempting to start own tunnel...");
     const tunnel = await startTunnel();
     const cmd = `pymobiledevice3 developer dvt simulate-location set --rsd ${tunnel.host} ${tunnel.port} -- ${lat} ${lng}`;
     console.log(`[geoghost] Trying new tunnel: ${cmd}`);
@@ -269,10 +375,10 @@ ipcMain.handle("location:set", async (_event, { lat, lng }) => {
     console.log(`[geoghost] New tunnel success, output: "${output}"`);
     return { ok: true, method: "new-tunnel" };
   } catch (err) {
-    console.error("[geoghost] Tunnel simulate-location failed:", err.message);
+    console.error("[geoghost] Own tunnel failed:", err.message);
   }
 
-  // Legacy fallback (iOS < 17)
+  // Legacy fallback (iOS < 17 only)
   const legacyCmds = [
     `pymobiledevice3 developer dvt simulate-location set -- ${lat} ${lng}`,
     `pymobiledevice3 developer simulate-location set -- ${lat} ${lng}`,
@@ -291,13 +397,13 @@ ipcMain.handle("location:set", async (_event, { lat, lng }) => {
 
   return {
     ok: false,
-    error: `All methods failed. For iOS 17+, try running in a separate terminal:\nsudo pymobiledevice3 remote start-tunnel\nThen retry in the app.`,
+    error: `All methods failed. For iOS 17+, try one of:\n1. sudo pymobiledevice3 remote tunneld (recommended)\n2. sudo pymobiledevice3 remote start-tunnel\nThen retry in the app.`,
   };
 });
 
 // Reset (clear) simulated location
 ipcMain.handle("location:reset", async () => {
-  // Try with tunnel first
+  // Try with cached tunnel first
   if (rsdHost && rsdPort) {
     try {
       await run(`pymobiledevice3 developer dvt simulate-location clear --rsd ${rsdHost} ${rsdPort}`);
@@ -306,6 +412,24 @@ ipcMain.handle("location:reset", async () => {
       console.error("RSD clear location failed:", err.message);
     }
   }
+
+  // Try discovering external tunnel
+  try {
+    const discovered = await discoverExternalTunnel();
+    if (discovered && discovered.host && discovered.port) {
+      await run(`pymobiledevice3 developer dvt simulate-location clear --rsd ${discovered.host} ${discovered.port}`);
+      return { ok: true };
+    }
+  } catch {}
+
+  // Try --tunnel UDID
+  try {
+    const udid = await getDeviceUDID();
+    if (udid) {
+      await run(`pymobiledevice3 developer dvt simulate-location clear --tunnel ${udid}`, 20000);
+      return { ok: true };
+    }
+  } catch {}
 
   // Legacy fallbacks
   try {
