@@ -4,12 +4,19 @@ import { DeviceStatusCard } from "@/components/DeviceStatus";
 import { MapPanel } from "@/components/MapPanel";
 import { getDeviceStatus, type DeviceStatus } from "@/lib/mock-api";
 import { useFavorites, useRecents } from "@/hooks/use-location-storage";
+import { useSettings } from "@/hooks/use-settings";
 
 const Index = () => {
   const [deviceStatus, setDeviceStatus] = useState<DeviceStatus | null>(null);
   const [deviceLoading, setDeviceLoading] = useState(false);
   const { favorites, addFavorite, removeFavorite } = useFavorites();
   const { recents, addRecent } = useRecents();
+  const { settings } = useSettings();
+
+  // Apply map style as data attribute for dynamic theming
+  useEffect(() => {
+    document.documentElement.setAttribute("data-map-style", settings.mapStyle);
+  }, [settings.mapStyle]);
 
   const refreshDevice = useCallback(async () => {
     setDeviceLoading(true);
