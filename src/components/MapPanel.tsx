@@ -1,7 +1,10 @@
-import { useRef, useEffect, useState, useCallback, useMemo } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { Search, Star, Clock, MapPin, Navigation, Play, Pause, Plus, Trash2, Loader2 } from "lucide-react";
+import {
+  Search, Star, Clock, MapPin, Navigation, Play, Pause,
+  Trash2, Loader2, Undo2, Pencil, MousePointerClick,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -10,6 +13,16 @@ import { toast } from "sonner";
 import { setLocation, resetLocation, type DeviceStatus } from "@/lib/mock-api";
 import { type SavedLocation } from "@/hooks/use-location-storage";
 import { useSettings, TRANSPORT_SPEEDS } from "@/hooks/use-settings";
+import {
+  type Waypoint,
+  haversine,
+  routeDistance,
+  formatDistance,
+  formatEta,
+  snapToRoads,
+  snapDrawnPath,
+  transportToProfile,
+} from "@/lib/route-utils";
 
 const MAPBOX_TOKEN = "pk.eyJ1IjoiY2FybHppdG8iLCJhIjoiY21scGRkMWRsMWFtODNlcXcwa25yNnprcSJ9.KE1oBQcON-JrySAX_HlKKg";
 const DEFAULT_CENTER: [number, number] = [-122.4194, 37.7749];
@@ -30,20 +43,29 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
   const markerRef = useRef<mapboxgl.Marker | null>(null);
   const routeMarkersRef = useRef<mapboxgl.Marker[]>([]);
 
-  const [coords, setCoords] = useState<{ lat: number; lng: number }>({ lat: 37.7749, lng: -122.4194 });
+  const [coords, setCoords] = useState<Waypoint>({ lat: 37.7749, lng: -122.4194 });
   const [searchQuery, setSearchQuery] = useState("");
   const [settingLocation, setSettingLocation] = useState(false);
   const [resettingLocation, setResettingLocation] = useState(false);
   const [locationChanged, setLocationChanged] = useState(false);
   const [mode, setMode] = useState<"static" | "route">("static");
-  const [waypoints, setWaypoints] = useState<{ lat: number; lng: number }[]>([]);
+
+  // Route state
+  const [routeMode, setRouteMode] = useState<"tap" | "draw">("tap");
+  const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
+  const [snappedRoute, setSnappedRoute] = useState<Waypoint[]>([]);
+  const [isSnapping, setIsSnapping] = useState(false);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const drawPointsRef = useRef<Waypoint[]>([]);
   const [simulating, setSimulating] = useState(false);
   const simulationRef = useRef<number | null>(null);
-  const simulationIndex = useRef(0);
+  const [undoStack, setUndoStack] = useState<Waypoint[][]>([]);
 
   const connected = deviceStatus?.connected ?? false;
   const devMode = deviceStatus?.developerMode ?? false;
   const canSpoof = connected && devMode;
+
+  const profile = transportToProfile(settings.transportMode);
 
   // Init map
   useEffect(() => {
@@ -68,19 +90,13 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
       setCoords({ lat: parseFloat(lngLat.lat.toFixed(6)), lng: parseFloat(lngLat.lng.toFixed(6)) });
     });
 
-    map.on("click", (e) => {
-      const { lat, lng } = e.lngLat;
-      marker.setLngLat([lng, lat]);
-      setCoords({ lat: parseFloat(lat.toFixed(6)), lng: parseFloat(lng.toFixed(6)) });
-    });
-
     mapRef.current = map;
     markerRef.current = marker;
 
     return () => { map.remove(); mapRef.current = null; };
   }, []);
 
-  // Switch map style when setting changes
+  // Map style switcher
   const MAP_STYLES: Record<string, string> = {
     dark: "mapbox://styles/mapbox/dark-v11",
     satellite: "mapbox://styles/mapbox/satellite-streets-v12",
@@ -93,6 +109,222 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     }
   }, [settings.mapStyle]);
 
+  // Handle map clicks — different behavior per mode
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const handleClick = (e: mapboxgl.MapMouseEvent) => {
+      const { lat, lng } = e.lngLat;
+      const point: Waypoint = { lat: parseFloat(lat.toFixed(6)), lng: parseFloat(lng.toFixed(6)) };
+      setCoords(point);
+      markerRef.current?.setLngLat([point.lng, point.lat]);
+    };
+
+    map.on("click", handleClick);
+    return () => { map.off("click", handleClick); };
+  }, []);
+
+  // Route mode: handle map clicks to add waypoints in tap mode
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || mode !== "route" || routeMode !== "tap") return;
+
+    const handleRouteClick = async (e: mapboxgl.MapMouseEvent) => {
+      const { lat, lng } = e.lngLat;
+      const wp: Waypoint = { lat: parseFloat(lat.toFixed(6)), lng: parseFloat(lng.toFixed(6)) };
+
+      setUndoStack((prev) => [...prev, [...waypoints]]);
+
+      // Add marker
+      const m = new mapboxgl.Marker({
+        color: waypoints.length === 0 ? "#39e75f" : "#a855f7",
+        scale: 0.7,
+      })
+        .setLngLat([wp.lng, wp.lat])
+        .addTo(map);
+      routeMarkersRef.current.push(m);
+
+      const newWaypoints = [...waypoints, wp];
+      setWaypoints(newWaypoints);
+
+      // Snap to road between last two waypoints
+      if (newWaypoints.length >= 2) {
+        setIsSnapping(true);
+        const from = newWaypoints[newWaypoints.length - 2];
+        const to = wp;
+        const snapped = await snapToRoads(from, to, profile);
+
+        setSnappedRoute((prev) => {
+          const base = prev.length > 0 ? prev : [from];
+          return [...base, ...snapped.slice(1)];
+        });
+        setIsSnapping(false);
+      }
+    };
+
+    map.on("click", handleRouteClick);
+    return () => { map.off("click", handleRouteClick); };
+  }, [mode, routeMode, waypoints, profile]);
+
+  // Route mode: drawing
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || mode !== "route" || routeMode !== "draw") return;
+
+    let drawing = false;
+
+    const onMouseDown = (e: mapboxgl.MapMouseEvent) => {
+      drawing = true;
+      drawPointsRef.current = [{ lat: e.lngLat.lat, lng: e.lngLat.lng }];
+      map.getCanvas().style.cursor = "crosshair";
+      // Disable map dragging while drawing
+      map.dragPan.disable();
+    };
+
+    const onMouseMove = (e: mapboxgl.MapMouseEvent) => {
+      if (!drawing) return;
+      const pt = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+      const last = drawPointsRef.current[drawPointsRef.current.length - 1];
+      // Only add if moved enough (~10m)
+      if (haversine(last, pt) > 0.01) {
+        drawPointsRef.current.push(pt);
+        drawPreviewLine(drawPointsRef.current);
+      }
+    };
+
+    const onMouseUp = async () => {
+      if (!drawing) return;
+      drawing = false;
+      map.dragPan.enable();
+      map.getCanvas().style.cursor = "";
+
+      const points = drawPointsRef.current;
+      if (points.length < 2) return;
+
+      setIsSnapping(true);
+      const snapped = await snapDrawnPath(points, profile);
+      setIsSnapping(false);
+
+      // Sample waypoints from snapped path
+      const sampledWps: Waypoint[] = [];
+      const totalDist = routeDistance(snapped);
+      const numSamples = Math.max(2, Math.min(20, Math.ceil(totalDist / 0.1)));
+      for (let i = 0; i < numSamples; i++) {
+        const idx = Math.round((i / (numSamples - 1)) * (snapped.length - 1));
+        sampledWps.push(snapped[idx]);
+      }
+
+      setUndoStack((prev) => [...prev, [...waypoints]]);
+      
+      // Add markers for start/end
+      const startM = new mapboxgl.Marker({ color: "#39e75f", scale: 0.7 })
+        .setLngLat([sampledWps[0].lng, sampledWps[0].lat])
+        .addTo(map);
+      const endM = new mapboxgl.Marker({ color: "#a855f7", scale: 0.7 })
+        .setLngLat([sampledWps[sampledWps.length - 1].lng, sampledWps[sampledWps.length - 1].lat])
+        .addTo(map);
+      routeMarkersRef.current.push(startM, endM);
+
+      setWaypoints((prev) => [...prev, ...sampledWps]);
+      setSnappedRoute((prev) => [...prev, ...snapped]);
+
+      // Clear preview line
+      removePreviewLine();
+    };
+
+    map.on("mousedown", onMouseDown);
+    map.on("mousemove", onMouseMove);
+    map.on("mouseup", onMouseUp);
+
+    return () => {
+      map.off("mousedown", onMouseDown);
+      map.off("mousemove", onMouseMove);
+      map.off("mouseup", onMouseUp);
+      map.dragPan.enable();
+      map.getCanvas().style.cursor = "";
+    };
+  }, [mode, routeMode, waypoints, profile]);
+
+  // Draw preview line while drawing
+  const drawPreviewLine = useCallback((points: Waypoint[]) => {
+    const map = mapRef.current;
+    if (!map || points.length < 2) return;
+    const coords = points.map((p) => [p.lng, p.lat]);
+    const sourceId = "draw-preview";
+
+    if (map.getSource(sourceId)) {
+      (map.getSource(sourceId) as mapboxgl.GeoJSONSource).setData({
+        type: "Feature",
+        properties: {},
+        geometry: { type: "LineString", coordinates: coords },
+      });
+    } else {
+      map.addSource(sourceId, {
+        type: "geojson",
+        data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords } },
+      });
+      map.addLayer({
+        id: "draw-preview-layer",
+        type: "line",
+        source: sourceId,
+        paint: { "line-color": "#f97316", "line-width": 3, "line-opacity": 0.6 },
+      });
+    }
+  }, []);
+
+  const removePreviewLine = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (map.getLayer("draw-preview-layer")) map.removeLayer("draw-preview-layer");
+    if (map.getSource("draw-preview")) map.removeSource("draw-preview");
+  }, []);
+
+  // Draw the snapped route line
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const routePoints = snappedRoute.length >= 2 ? snappedRoute : waypoints;
+    if (routePoints.length < 2) {
+      // Remove line if exists
+      if (map.getLayer("route-line-layer")) map.removeLayer("route-line-layer");
+      if (map.getSource("route-line")) map.removeSource("route-line");
+      return;
+    }
+
+    const coordinates = routePoints.map((w) => [w.lng, w.lat]);
+    const sourceId = "route-line";
+
+    // Wait for style to load
+    const updateLine = () => {
+      if (map.getSource(sourceId)) {
+        (map.getSource(sourceId) as mapboxgl.GeoJSONSource).setData({
+          type: "Feature",
+          properties: {},
+          geometry: { type: "LineString", coordinates },
+        });
+      } else {
+        map.addSource(sourceId, {
+          type: "geojson",
+          data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates } },
+        });
+        map.addLayer({
+          id: "route-line-layer",
+          type: "line",
+          source: sourceId,
+          paint: { "line-color": "#a855f7", "line-width": 4, "line-opacity": 0.85 },
+        });
+      }
+    };
+
+    if (map.isStyleLoaded()) {
+      updateLine();
+    } else {
+      map.once("styledata", updateLine);
+    }
+  }, [snappedRoute, waypoints]);
+
   const flyTo = useCallback((lat: number, lng: number) => {
     setCoords({ lat, lng });
     markerRef.current?.setLngLat([lng, lat]);
@@ -101,21 +333,17 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
 
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return;
-    // Try parsing coordinates first
     const coordMatch = searchQuery.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
     if (coordMatch) {
-      const lat = parseFloat(coordMatch[1]);
-      const lng = parseFloat(coordMatch[2]);
-      flyTo(lat, lng);
+      flyTo(parseFloat(coordMatch[1]), parseFloat(coordMatch[2]));
       return;
     }
-    // Use Mapbox Geocoding API
     try {
       const res = await fetch(
         `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchQuery)}.json?access_token=${MAPBOX_TOKEN}&limit=1`
       );
       const data = await res.json();
-      if (data.features && data.features.length > 0) {
+      if (data.features?.length > 0) {
         const [lng, lat] = data.features[0].center;
         flyTo(lat, lng);
         toast.success(`Found: ${data.features[0].place_name}`);
@@ -133,13 +361,13 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     const res = await setLocation(coords.lat, coords.lng);
     setSettingLocation(false);
     if (res.ok) {
-    toast.success("Location set successfully");
+      toast.success("Location set successfully");
       setLocationChanged(true);
       onAddRecent({ lat: coords.lat, lng: coords.lng, label: `${coords.lat}, ${coords.lng}` });
     } else {
       toast.error(res.error || "Failed to set location");
     }
-  }, [coords, connected, onAddRecent]);
+  }, [coords, connected, canSpoof, onAddRecent]);
 
   const handleResetLocation = useCallback(async () => {
     if (!canSpoof) { toast.error(!connected ? "No device connected." : "Developer Mode is disabled."); return; }
@@ -152,68 +380,52 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     } else {
       toast.error(res.error || "Failed to reset location");
     }
-  }, [connected]);
-
-  // Route mode: add waypoint
-  const addWaypoint = useCallback(() => {
-    const wp = { lat: coords.lat, lng: coords.lng };
-    setWaypoints((prev) => [...prev, wp]);
-    if (mapRef.current) {
-      const m = new mapboxgl.Marker({ color: "#a855f7", scale: 0.7 })
-        .setLngLat([wp.lng, wp.lat])
-        .addTo(mapRef.current);
-      routeMarkersRef.current.push(m);
-      // Draw route line
-      drawRoute([...waypoints, wp]);
-    }
-  }, [coords, waypoints]);
-
-  const drawRoute = useCallback((wps: { lat: number; lng: number }[]) => {
-    const map = mapRef.current;
-    if (!map || wps.length < 2) return;
-    const sourceId = "route-line";
-    const coordinates = wps.map((w) => [w.lng, w.lat]);
-    if (map.getSource(sourceId)) {
-      (map.getSource(sourceId) as mapboxgl.GeoJSONSource).setData({
-        type: "Feature",
-        properties: {},
-        geometry: { type: "LineString", coordinates },
-      });
-    } else {
-      map.addSource(sourceId, {
-        type: "geojson",
-        data: {
-          type: "Feature",
-          properties: {},
-          geometry: { type: "LineString", coordinates },
-        },
-      });
-      map.addLayer({
-        id: "route-line-layer",
-        type: "line",
-        source: sourceId,
-        paint: {
-          "line-color": "#a855f7",
-          "line-width": 3,
-          "line-dasharray": [2, 2],
-        },
-      });
-    }
-  }, []);
+  }, [connected, canSpoof]);
 
   const clearRoute = useCallback(() => {
     routeMarkersRef.current.forEach((m) => m.remove());
     routeMarkersRef.current = [];
     setWaypoints([]);
+    setSnappedRoute([]);
+    setUndoStack([]);
     const map = mapRef.current;
     if (map?.getLayer("route-line-layer")) map.removeLayer("route-line-layer");
     if (map?.getSource("route-line")) map.removeSource("route-line");
+    removePreviewLine();
     if (simulationRef.current) {
       cancelAnimationFrame(simulationRef.current);
       simulationRef.current = null;
     }
     setSimulating(false);
-  }, []);
+  }, [removePreviewLine]);
+
+  const undoLastWaypoint = useCallback(() => {
+    if (undoStack.length === 0) return;
+    const prevWaypoints = undoStack[undoStack.length - 1];
+    setUndoStack((prev) => prev.slice(0, -1));
+
+    // Remove excess markers
+    const toRemove = routeMarkersRef.current.splice(prevWaypoints.length);
+    toRemove.forEach((m) => m.remove());
+
+    setWaypoints(prevWaypoints);
+    // Rebuild snapped route
+    if (prevWaypoints.length < 2) {
+      setSnappedRoute([]);
+    } else {
+      // Re-snap entire route
+      (async () => {
+        setIsSnapping(true);
+        let allSnapped: Waypoint[] = [prevWaypoints[0]];
+        for (let i = 0; i < prevWaypoints.length - 1; i++) {
+          const seg = await snapToRoads(prevWaypoints[i], prevWaypoints[i + 1], profile);
+          allSnapped = [...allSnapped, ...seg.slice(1)];
+        }
+        setSnappedRoute(allSnapped);
+        setIsSnapping(false);
+      })();
+    }
+  }, [undoStack, profile]);
 
   const toggleSimulation = useCallback(() => {
     if (simulating) {
@@ -222,34 +434,21 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
       setSimulating(false);
       return;
     }
-    if (waypoints.length < 2) { toast.error("Add at least 2 waypoints"); return; }
+
+    const routePoints = snappedRoute.length >= 2 ? snappedRoute : waypoints;
+    if (routePoints.length < 2) { toast.error("Add at least 2 waypoints"); return; }
     if (!canSpoof) { toast.error(!connected ? "No device connected." : "Developer Mode is disabled."); return; }
 
-    // Haversine distance in km
-    const haversine = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
-      const R = 6371;
-      const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-      const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-      const sinLat = Math.sin(dLat / 2);
-      const sinLng = Math.sin(dLng / 2);
-      const h = sinLat * sinLat + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * sinLng * sinLng;
-      return 2 * R * Math.asin(Math.sqrt(h));
-    };
-
     const speedKmh = TRANSPORT_SPEEDS[settings.transportMode].speed;
-    
-    // Build segment list with interpolated steps (~200ms tick)
     const TICK_MS = 200;
-    const steps: { lat: number; lng: number }[] = [waypoints[0]];
-    
-    for (let i = 0; i < waypoints.length - 1; i++) {
-      const from = waypoints[i];
-      const to = waypoints[i + 1];
+    const steps: Waypoint[] = [routePoints[0]];
+
+    for (let i = 0; i < routePoints.length - 1; i++) {
+      const from = routePoints[i];
+      const to = routePoints[i + 1];
       const distKm = haversine(from, to);
-      const timeHours = distKm / speedKmh;
-      const timeMs = timeHours * 3600 * 1000;
+      const timeMs = (distKm / speedKmh) * 3600 * 1000;
       const numSteps = Math.max(1, Math.round(timeMs / TICK_MS));
-      
       for (let s = 1; s <= numSteps; s++) {
         const t = s / numSteps;
         steps.push({
@@ -283,9 +482,14 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
       }
       simulationRef.current = requestAnimationFrame(animate);
     };
-    
+
     simulationRef.current = requestAnimationFrame(animate);
-  }, [simulating, waypoints, connected, canSpoof, settings.transportMode]);
+  }, [simulating, snappedRoute, waypoints, connected, canSpoof, settings.transportMode]);
+
+  // Route stats
+  const routePoints = snappedRoute.length >= 2 ? snappedRoute : waypoints;
+  const totalKm = routeDistance(routePoints);
+  const speed = TRANSPORT_SPEEDS[settings.transportMode].speed;
 
   return (
     <div className="relative flex-1 overflow-hidden rounded-2xl border border-border/40">
@@ -353,8 +557,64 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
         </Popover>
       </div>
 
+      {/* Route mode indicator overlay */}
+      {mode === "route" && waypoints.length === 0 && !simulating && (
+        <div className="absolute left-1/2 top-16 z-10 -translate-x-1/2 pointer-events-none">
+          <div className="glass-strong rounded-xl px-4 py-2 text-center animate-fade-in">
+            <p className="text-xs text-foreground font-medium">
+              {routeMode === "tap" ? "Tap the map to add points to your route" : "Click & drag to draw your route"}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Snapping indicator */}
+      {isSnapping && (
+        <div className="absolute left-1/2 top-16 z-10 -translate-x-1/2">
+          <div className="glass-strong rounded-lg px-3 py-1.5 flex items-center gap-2 animate-fade-in">
+            <Loader2 className="h-3 w-3 animate-spin text-primary" />
+            <span className="text-[11px] text-muted-foreground">Snapping to road...</span>
+          </div>
+        </div>
+      )}
+
       {/* Map */}
-      <div ref={mapContainer} className="h-full w-full" />
+      <div ref={mapContainer} className={`h-full w-full ${mode === "route" && routeMode === "draw" ? "cursor-crosshair" : ""}`} />
+
+      {/* Route mode floating tools */}
+      {mode === "route" && !simulating && (
+        <div className="absolute bottom-[200px] left-1/2 -translate-x-1/2 z-10 flex gap-1.5">
+          <Button
+            size="sm"
+            variant={routeMode === "tap" ? "default" : "secondary"}
+            onClick={() => setRouteMode("tap")}
+            className={`h-9 w-9 p-0 rounded-full ${routeMode === "tap" ? "glow-sm" : "glass"}`}
+            title="Tap to add points"
+          >
+            <MousePointerClick className="h-4 w-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant={routeMode === "draw" ? "default" : "secondary"}
+            onClick={() => setRouteMode("draw")}
+            className={`h-9 w-9 p-0 rounded-full ${routeMode === "draw" ? "glow-sm" : "glass"}`}
+            title="Draw route"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          {undoStack.length > 0 && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={undoLastWaypoint}
+              className="h-9 w-9 p-0 rounded-full glass"
+              title="Undo"
+            >
+              <Undo2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Bottom controls */}
       <div className="absolute bottom-4 left-4 right-4 z-10">
@@ -380,7 +640,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
           </div>
 
           {/* Tabs */}
-          <Tabs value={mode} onValueChange={(v) => setMode(v as "static" | "route")}>
+          <Tabs value={mode} onValueChange={(v) => { setMode(v as "static" | "route"); if (v === "static") clearRoute(); }}>
             <TabsList className="h-8 bg-secondary/50 rounded-lg">
               <TabsTrigger value="static" className="text-[11px] h-6 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:glow-sm">Static</TabsTrigger>
               <TabsTrigger value="route" className="text-[11px] h-6 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:glow-sm">Route</TabsTrigger>
@@ -401,44 +661,49 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
               </div>
             </TabsContent>
 
-            <TabsContent value="route" className="mt-2.5 space-y-2">
+            <TabsContent value="route" className="mt-2.5 space-y-2.5">
+              {/* Stats bar */}
+              {waypoints.length >= 2 && (
+                <div className="flex items-center gap-3 rounded-lg bg-secondary/40 px-3 py-2">
+                  <div className="text-center">
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Distance</p>
+                    <p className="text-sm font-semibold text-foreground">{formatDistance(totalKm)}</p>
+                  </div>
+                  <div className="h-6 w-px bg-border/40" />
+                  <div className="text-center">
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Est. Time</p>
+                    <p className="text-sm font-semibold text-foreground">{formatEta(totalKm, speed)}</p>
+                  </div>
+                  <div className="h-6 w-px bg-border/40" />
+                  <div className="text-center">
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Mode</p>
+                    <p className="text-sm">{TRANSPORT_SPEEDS[settings.transportMode].emoji}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Action buttons */}
               <div className="flex gap-1.5">
-                <Button size="sm" variant="secondary" onClick={addWaypoint} className="text-[11px] h-8">
-                  <Plus className="h-3 w-3 mr-1" /> Waypoint
-                </Button>
-                <Button size="sm" variant={simulating ? "destructive" : "default"} onClick={toggleSimulation} disabled={!canSpoof} className={`text-[11px] h-8 ${!simulating ? "glow-sm" : ""}`}>
-                  {simulating ? <Pause className="h-3 w-3 mr-1" /> : <Play className="h-3 w-3 mr-1" />}
-                  {simulating ? "Stop" : "Simulate"}
+                <Button
+                  size="sm"
+                  variant={simulating ? "destructive" : "default"}
+                  onClick={toggleSimulation}
+                  disabled={!canSpoof || waypoints.length < 2}
+                  className={`flex-1 text-[11px] h-9 ${!simulating ? "glow-sm" : ""}`}
+                >
+                  {simulating ? <Pause className="h-3.5 w-3.5 mr-1" /> : <Play className="h-3.5 w-3.5 mr-1" />}
+                  {simulating ? "Stop" : "Simulate Route"}
                 </Button>
                 {waypoints.length > 0 && (
-                  <Button size="sm" variant="ghost" onClick={clearRoute} className="text-[11px] h-8 text-muted-foreground">
-                    <Trash2 className="h-3 w-3 mr-1" /> Clear
+                  <Button size="sm" variant="ghost" onClick={clearRoute} className="text-[11px] h-9 text-muted-foreground">
+                    <Trash2 className="h-3.5 w-3.5 mr-1" /> Clear
                   </Button>
                 )}
               </div>
-              {(() => {
-                const haversine = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
-                  const R = 6371;
-                  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-                  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-                  const sinLat = Math.sin(dLat / 2);
-                  const sinLng = Math.sin(dLng / 2);
-                  const h = sinLat * sinLat + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * sinLng * sinLng;
-                  return 2 * R * Math.asin(Math.sqrt(h));
-                };
-                const totalKm = waypoints.reduce((sum, wp, i) => i === 0 ? 0 : sum + haversine(waypoints[i - 1], wp), 0);
-                const speed = TRANSPORT_SPEEDS[settings.transportMode].speed;
-                const totalMin = Math.round((totalKm / speed) * 60);
-                const etaStr = totalMin < 1 ? "<1 min" : totalMin < 60 ? `${totalMin} min` : `${Math.floor(totalMin / 60)}h ${totalMin % 60}m`;
-                const distStr = totalKm < 1 ? `${Math.round(totalKm * 1000)} m` : `${totalKm.toFixed(1)} km`;
-                return (
-                  <p className="text-[10px] text-muted-foreground">
-                    {waypoints.length} waypoint{waypoints.length !== 1 ? "s" : ""}
-                    {waypoints.length >= 2 && <> · {distStr} · ~{etaStr}</>}
-                    {" "}· {TRANSPORT_SPEEDS[settings.transportMode].emoji} {TRANSPORT_SPEEDS[settings.transportMode].label}
-                  </p>
-                );
-              })()}
+
+              <p className="text-[10px] text-muted-foreground">
+                {waypoints.length} point{waypoints.length !== 1 ? "s" : ""} · Routes snap to nearby roads
+              </p>
             </TabsContent>
           </Tabs>
 
