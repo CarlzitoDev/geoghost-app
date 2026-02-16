@@ -1,7 +1,8 @@
-import { Ghost, MapPin, Settings, HelpCircle } from "lucide-react";
+import { MapPin, Settings, HelpCircle } from "lucide-react";
 import { useState } from "react";
 import { HelpPanel } from "./HelpPanel";
 import { SettingsPanel } from "./SettingsPanel";
+import geoghostLogo from "@/assets/geoghost-logo.png";
 
 export function AppSidebar() {
   const [helpOpen, setHelpOpen] = useState(false);
@@ -12,9 +13,7 @@ export function AppSidebar() {
       <aside className="flex h-screen w-[60px] flex-col items-center border-r border-border/50 bg-sidebar-background py-5">
         {/* Logo */}
         <div className="mb-10 flex flex-col items-center gap-1.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 glow-sm">
-            <Ghost className="h-5 w-5 text-primary" />
-          </div>
+          <img src={geoghostLogo} alt="geoghost" className="h-9 w-9 rounded-lg" />
           <span className="text-[8px] font-semibold uppercase tracking-[0.2em] text-primary/70 text-glow">
             geo
           </span>
