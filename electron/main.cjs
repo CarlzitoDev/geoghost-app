@@ -4,9 +4,11 @@ const { exec, execSync, spawn } = require("child_process");
 
 let mainWindow;
 let tunnelProcess = null;
+let tunneldProcess = null; // The sudo tunneld daemon process
 let simLocationProcess = null; // Keep-alive process for simulate-location
 let rsdHost = null;
 let rsdPort = null;
+let tunneldStarted = false; // Track if we already started tunneld
 
 const PMD_PATH_EXTRAS = ":/usr/local/bin:/opt/homebrew/bin:/Library/Frameworks/Python.framework/Versions/3.14/bin";
 
@@ -57,9 +59,59 @@ app.on("before-quit", () => {
     tunnelProcess.kill();
     tunnelProcess = null;
   }
+  // Kill tunneld — it runs as root so we need sudo kill
+  if (tunneldProcess && tunneldProcess.pid) {
+    try {
+      execSync(`kill ${tunneldProcess.pid}`, { stdio: "ignore" });
+    } catch {}
+    tunneldProcess = null;
+  }
 });
 
-// ─── Helper: run a shell command and return stdout ───
+// ─── Auto-start tunneld with sudo via macOS password prompt ───
+function startTunneld() {
+  return new Promise((resolve, reject) => {
+    if (tunneldStarted) return resolve();
+
+    // Check if tunneld is already running by querying its HTTP API
+    const http = require("http");
+    const checkReq = http.get("http://127.0.0.1:49151/tunnels", { timeout: 1500 }, (res) => {
+      let body = "";
+      res.on("data", (chunk) => body += chunk);
+      res.on("end", () => {
+        console.log("[geoghost] tunneld already running");
+        tunneldStarted = true;
+        resolve();
+      });
+    });
+    checkReq.on("error", () => {
+      // Not running — start it via osascript (shows native macOS password dialog)
+      console.log("[geoghost] Starting tunneld via osascript sudo prompt...");
+
+      const pymPath = getEnv().PATH;
+      // Use osascript to run tunneld with admin privileges
+      // The 'with administrator privileges' triggers the native macOS password dialog
+      const script = `do shell script "PATH='${pymPath}' pymobiledevice3 remote tunneld &> /dev/null & echo $!" with administrator privileges`;
+
+      exec(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { env: getEnv(), timeout: 30000 }, (err, stdout) => {
+        if (err) {
+          console.error("[geoghost] Failed to start tunneld:", err.message);
+          // User cancelled the password dialog or other error
+          reject(err);
+          return;
+        }
+        const pid = stdout.trim();
+        console.log(`[geoghost] tunneld started with PID: ${pid}`);
+        tunneldProcess = { pid: parseInt(pid, 10) };
+        tunneldStarted = true;
+
+        // Give tunneld a moment to initialize
+        setTimeout(resolve, 2000);
+      });
+    });
+    checkReq.on("timeout", () => { checkReq.destroy(); });
+  });
+}
 function run(cmd, timeout = 15000) {
   return new Promise((resolve, reject) => {
     exec(cmd, { timeout, env: getEnv() }, (err, stdout, stderr) => {
@@ -375,6 +427,13 @@ function spawnSimLocation(args) {
 ipcMain.handle("location:set", async (_event, { lat, lng }) => {
   console.log(`[geoghost] location:set called with lat=${lat}, lng=${lng}`);
   console.log(`[geoghost] Current tunnel state: rsdHost=${rsdHost}, rsdPort=${rsdPort}, tunnelProcess=${!!tunnelProcess}`);
+
+  // Auto-start tunneld if not already running (shows macOS password prompt on first use)
+  try {
+    await startTunneld();
+  } catch (err) {
+    console.log("[geoghost] tunneld auto-start skipped:", err.message);
+  }
 
   const udid = await getDeviceUDID();
   console.log(`[geoghost] Device UDID: ${udid}`);
