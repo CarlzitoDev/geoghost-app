@@ -17,9 +17,7 @@ export function DeviceStatusCard({ status, onRefresh, loading }: DeviceStatusCar
 
   const dotClass = !connected
     ? "bg-destructive shadow-[0_0_8px_hsl(0,68%,52%)]"
-    : !devMode
-      ? "bg-[hsl(var(--warning))] shadow-[0_0_8px_hsl(45,93%,47%)]"
-      : "bg-primary shadow-[0_0_8px_hsl(145,72%,46%)]";
+    : "bg-primary shadow-[0_0_8px_hsl(145,72%,46%)]";
 
   return (
     <div className="space-y-1.5">
