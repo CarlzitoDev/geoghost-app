@@ -8,11 +8,10 @@ import {
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { RotateCcw, Map, Timer, Bookmark, Hash } from "lucide-react";
-import { useSettings, type AppSettings } from "@/hooks/use-settings";
+import { RotateCcw, Map, Route, Bookmark, Hash } from "lucide-react";
+import { useSettings, TRANSPORT_SPEEDS, type AppSettings, type TransportMode } from "@/hooks/use-settings";
 
 interface SettingsPanelProps {
   open: boolean;
@@ -39,23 +38,21 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               <Map className="h-3.5 w-3.5" />
               Map
             </h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs text-muted-foreground">Map Style</Label>
-                <Select
-                  value={settings.mapStyle}
-                  onValueChange={(v) => update({ mapStyle: v as AppSettings["mapStyle"] })}
-                >
-                  <SelectTrigger className="w-28 h-7 text-[11px] bg-secondary/50 border-border/60">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-border">
-                    <SelectItem value="dark" className="text-xs">Dark</SelectItem>
-                    <SelectItem value="satellite" className="text-xs">Satellite</SelectItem>
-                    <SelectItem value="streets" className="text-xs">Streets</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-muted-foreground">Map Style</Label>
+              <Select
+                value={settings.mapStyle}
+                onValueChange={(v) => update({ mapStyle: v as AppSettings["mapStyle"] })}
+              >
+                <SelectTrigger className="w-28 h-7 text-[11px] bg-secondary/50 border-border/60">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  <SelectItem value="dark" className="text-xs">Dark</SelectItem>
+                  <SelectItem value="satellite" className="text-xs">Satellite</SelectItem>
+                  <SelectItem value="streets" className="text-xs">Streets</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </section>
 
@@ -86,29 +83,38 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
           <Separator className="bg-border/40" />
 
-          {/* Simulation */}
+          {/* Transport Mode */}
           <section className="space-y-3">
             <h3 className="flex items-center gap-2 text-[11px] font-semibold text-primary uppercase tracking-wider">
-              <Timer className="h-3.5 w-3.5" />
-              Simulation
+              <Route className="h-3.5 w-3.5" />
+              Route Simulation
             </h3>
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs text-muted-foreground">Speed</Label>
-                <span className="text-[11px] font-mono text-primary">{settings.simulationSpeed}s</span>
+              <Label className="text-xs text-muted-foreground">Transport mode</Label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(Object.keys(TRANSPORT_SPEEDS) as TransportMode[]).map((mode) => {
+                  const { label, emoji, speed } = TRANSPORT_SPEEDS[mode];
+                  const active = settings.transportMode === mode;
+                  return (
+                    <button
+                      key={mode}
+                      onClick={() => update({ transportMode: mode })}
+                      className={`flex flex-col items-center gap-1 rounded-lg px-2 py-2.5 text-center transition-all ${
+                        active
+                          ? "bg-primary/15 border border-primary/40 text-primary glow-sm"
+                          : "bg-secondary/40 border border-border/40 text-muted-foreground hover:bg-secondary/60"
+                      }`}
+                    >
+                      <span className="text-lg">{emoji}</span>
+                      <span className="text-[10px] font-medium">{label}</span>
+                      <span className="text-[9px] text-muted-foreground">{speed} km/h</span>
+                    </button>
+                  );
+                })}
               </div>
-              <Slider
-                value={[settings.simulationSpeed]}
-                onValueChange={([v]) => update({ simulationSpeed: v })}
-                min={0.5}
-                max={5}
-                step={0.5}
-                className="w-full"
-              />
-              <div className="flex justify-between text-[10px] text-muted-foreground/60">
-                <span>Fast</span>
-                <span>Slow</span>
-              </div>
+              <p className="text-[10px] text-muted-foreground/70 leading-relaxed">
+                The marker moves at a realistic pace based on the distance between waypoints.
+              </p>
             </div>
           </section>
 
@@ -149,7 +155,6 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
           <Separator className="bg-border/40" />
 
-          {/* Reset */}
           <Button
             variant="ghost"
             size="sm"

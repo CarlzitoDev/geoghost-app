@@ -9,7 +9,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { toast } from "sonner";
 import { setLocation, resetLocation, type DeviceStatus } from "@/lib/mock-api";
 import { type SavedLocation } from "@/hooks/use-location-storage";
-import { useSettings } from "@/hooks/use-settings";
+import { useSettings, TRANSPORT_SPEEDS } from "@/hooks/use-settings";
 
 const MAPBOX_TOKEN = "pk.eyJ1IjoiY2FybHppdG8iLCJhIjoiY21scGRkMWRsMWFtODNlcXcwa25yNnprcSJ9.KE1oBQcON-JrySAX_HlKKg";
 const DEFAULT_CENTER: [number, number] = [-122.4194, 37.7749];
@@ -209,7 +209,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     if (map?.getLayer("route-line-layer")) map.removeLayer("route-line-layer");
     if (map?.getSource("route-line")) map.removeSource("route-line");
     if (simulationRef.current) {
-      clearInterval(simulationRef.current);
+      cancelAnimationFrame(simulationRef.current);
       simulationRef.current = null;
     }
     setSimulating(false);
@@ -217,29 +217,75 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
 
   const toggleSimulation = useCallback(() => {
     if (simulating) {
-      if (simulationRef.current) clearInterval(simulationRef.current);
+      if (simulationRef.current) cancelAnimationFrame(simulationRef.current);
       simulationRef.current = null;
       setSimulating(false);
       return;
     }
     if (waypoints.length < 2) { toast.error("Add at least 2 waypoints"); return; }
     if (!canSpoof) { toast.error(!connected ? "No device connected." : "Developer Mode is disabled."); return; }
-    setSimulating(true);
-    simulationIndex.current = 0;
-    simulationRef.current = window.setInterval(() => {
-      const idx = simulationIndex.current;
-      if (idx >= waypoints.length) {
-        clearInterval(simulationRef.current!);
-        simulationRef.current = null;
-        setSimulating(false);
-        toast.success("Route simulation complete");
-        return;
+
+    // Haversine distance in km
+    const haversine = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+      const R = 6371;
+      const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+      const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+      const sinLat = Math.sin(dLat / 2);
+      const sinLng = Math.sin(dLng / 2);
+      const h = sinLat * sinLat + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * sinLng * sinLng;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    };
+
+    const speedKmh = TRANSPORT_SPEEDS[settings.transportMode].speed;
+    
+    // Build segment list with interpolated steps (~200ms tick)
+    const TICK_MS = 200;
+    const steps: { lat: number; lng: number }[] = [waypoints[0]];
+    
+    for (let i = 0; i < waypoints.length - 1; i++) {
+      const from = waypoints[i];
+      const to = waypoints[i + 1];
+      const distKm = haversine(from, to);
+      const timeHours = distKm / speedKmh;
+      const timeMs = timeHours * 3600 * 1000;
+      const numSteps = Math.max(1, Math.round(timeMs / TICK_MS));
+      
+      for (let s = 1; s <= numSteps; s++) {
+        const t = s / numSteps;
+        steps.push({
+          lat: from.lat + (to.lat - from.lat) * t,
+          lng: from.lng + (to.lng - from.lng) * t,
+        });
       }
-      const wp = waypoints[idx];
-      flyTo(wp.lat, wp.lng);
-      simulationIndex.current++;
-    }, settings.simulationSpeed * 1000);
-  }, [simulating, waypoints, connected, flyTo]);
+    }
+
+    setSimulating(true);
+    let stepIdx = 0;
+    let lastTime = performance.now();
+
+    const animate = (now: number) => {
+      if (now - lastTime >= TICK_MS) {
+        lastTime = now;
+        if (stepIdx >= steps.length) {
+          setSimulating(false);
+          simulationRef.current = null;
+          toast.success("Route simulation complete");
+          return;
+        }
+        const step = steps[stepIdx];
+        const rounded = {
+          lat: parseFloat(step.lat.toFixed(6)),
+          lng: parseFloat(step.lng.toFixed(6)),
+        };
+        setCoords(rounded);
+        markerRef.current?.setLngLat([rounded.lng, rounded.lat]);
+        stepIdx++;
+      }
+      simulationRef.current = requestAnimationFrame(animate);
+    };
+    
+    simulationRef.current = requestAnimationFrame(animate);
+  }, [simulating, waypoints, connected, canSpoof, settings.transportMode]);
 
   return (
     <div className="relative flex-1 overflow-hidden rounded-2xl border border-border/40">
@@ -370,7 +416,9 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
                   </Button>
                 )}
               </div>
-              <p className="text-[10px] text-muted-foreground">{waypoints.length} waypoint{waypoints.length !== 1 ? "s" : ""}</p>
+              <p className="text-[10px] text-muted-foreground">
+                {waypoints.length} waypoint{waypoints.length !== 1 ? "s" : ""} · {TRANSPORT_SPEEDS[settings.transportMode].emoji} {TRANSPORT_SPEEDS[settings.transportMode].label} ({TRANSPORT_SPEEDS[settings.transportMode].speed} km/h)
+              </p>
             </TabsContent>
           </Tabs>
 
