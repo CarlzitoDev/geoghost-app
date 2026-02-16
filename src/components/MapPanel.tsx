@@ -423,6 +423,16 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     if (res.ok) {
       toast.success("Location reset");
       setLocationChanged(false);
+      // Fly back to the phone's real location
+      try {
+        const loc = await getDeviceLocation();
+        if (loc.ok && loc.lat !== undefined && loc.lng !== undefined) {
+          const pos: [number, number] = [loc.lng, loc.lat];
+          mapRef.current?.flyTo({ center: pos, zoom: 13 });
+          markerRef.current?.setLngLat(pos);
+          setCoords({ lat: parseFloat(loc.lat.toFixed(6)), lng: parseFloat(loc.lng.toFixed(6)) });
+        }
+      } catch { /* ignore */ }
     } else {
       toast.error(res.error || "Failed to reset location");
     }
