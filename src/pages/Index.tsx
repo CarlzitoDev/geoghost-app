@@ -25,9 +25,9 @@ const Index = () => {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
       <AppSidebar />
-      <main className="flex flex-1 flex-col overflow-hidden p-3 gap-3">
-        {/* Top bar with device status */}
-        <div className="flex items-start">
+      <main className="relative flex flex-1 flex-col overflow-hidden p-3">
+        {/* Device status overlay */}
+        <div className="absolute left-7 top-7 z-20">
           <DeviceStatusCard
             status={deviceStatus}
             onRefresh={refreshDevice}
