@@ -5,12 +5,18 @@ export interface DeviceStatus {
   name: string;
   ios: string;
   connection: string;
+  developerMode: boolean;
 }
 
 let mockConnected = true;
+let mockDevMode = true;
 
 export function toggleDeviceConnection() {
   mockConnected = !mockConnected;
+}
+
+export function toggleDevMode() {
+  mockDevMode = !mockDevMode;
 }
 
 export function setDeviceConnected(val: boolean) {
@@ -26,6 +32,7 @@ export async function getDeviceStatus(): Promise<DeviceStatus> {
     name: mockConnected ? "iPhone 15 Pro" : "",
     ios: mockConnected ? "17.4.1" : "",
     connection: mockConnected ? "USB" : "",
+    developerMode: mockConnected ? mockDevMode : false,
   };
 }
 
