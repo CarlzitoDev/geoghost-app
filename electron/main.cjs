@@ -43,7 +43,7 @@ function run(cmd) {
     // Ensure PATH includes common locations for pymobiledevice3
     const env = {
       ...process.env,
-      PATH: `${process.env.PATH}:/usr/local/bin:/opt/homebrew/bin:/Users/${process.env.USER}/.local/bin:/Users/${process.env.USER}/Library/Python/3.11/bin:/Users/${process.env.USER}/Library/Python/3.12/bin:/Users/${process.env.USER}/Library/Python/3.13/bin`,
+      PATH: `${process.env.PATH}:/usr/local/bin:/opt/homebrew/bin:/Users/${process.env.USER}/.local/bin:/Library/Frameworks/Python.framework/Versions/3.14/bin:/Users/${process.env.USER}/Library/Python/3.11/bin:/Users/${process.env.USER}/Library/Python/3.12/bin:/Users/${process.env.USER}/Library/Python/3.13/bin:/Users/${process.env.USER}/Library/Python/3.14/bin`,
     };
     exec(cmd, { timeout: 15000, env }, (err, stdout, stderr) => {
       if (err) reject(new Error(stderr || err.message));
