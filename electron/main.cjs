@@ -68,48 +68,101 @@ app.on("before-quit", () => {
   }
 });
 
-// ─── Auto-start tunneld with sudo via macOS password prompt ───
-function startTunneld() {
-  return new Promise((resolve, reject) => {
-    if (tunneldStarted) return resolve();
-
-    // Check if tunneld is already running by querying its HTTP API
+// ─── Auto-start tunneld with sudo ───
+function isTunneldRunning() {
+  return new Promise((resolve) => {
     const http = require("http");
-    const checkReq = http.get("http://127.0.0.1:49151/tunnels", { timeout: 1500 }, (res) => {
+    const req = http.get("http://127.0.0.1:49151/tunnels", { timeout: 1500 }, (res) => {
       let body = "";
       res.on("data", (chunk) => body += chunk);
-      res.on("end", () => {
-        console.log("[geoghost] tunneld already running");
-        tunneldStarted = true;
-        resolve();
-      });
+      res.on("end", () => resolve(true));
     });
-    checkReq.on("error", () => {
-      // Not running — start it via osascript (shows native macOS password dialog)
-      console.log("[geoghost] Starting tunneld via osascript sudo prompt...");
+    req.on("error", () => resolve(false));
+    req.on("timeout", () => { req.destroy(); resolve(false); });
+  });
+}
 
-      const pymPath = getEnv().PATH;
-      // Use osascript to run tunneld with admin privileges
-      // The 'with administrator privileges' triggers the native macOS password dialog
-      const script = `do shell script "PATH='${pymPath}' pymobiledevice3 remote tunneld &> /dev/null & echo $!" with administrator privileges`;
+function startTunneldWithPassword(password) {
+  return new Promise(async (resolve, reject) => {
+    // Check if already running
+    if (await isTunneldRunning()) {
+      tunneldStarted = true;
+      return resolve({ alreadyRunning: true });
+    }
 
-      exec(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { env: getEnv(), timeout: 30000 }, (err, stdout) => {
-        if (err) {
-          console.error("[geoghost] Failed to start tunneld:", err.message);
-          // User cancelled the password dialog or other error
-          reject(err);
-          return;
-        }
-        const pid = stdout.trim();
-        console.log(`[geoghost] tunneld started with PID: ${pid}`);
-        tunneldProcess = { pid: parseInt(pid, 10) };
-        tunneldStarted = true;
+    console.log("[geoghost] Starting tunneld with provided password...");
+    const pymPath = getEnv().PATH;
 
-        // Give tunneld a moment to initialize
-        setTimeout(resolve, 2000);
-      });
+    // Use sudo -S to read password from stdin
+    const proc = spawn("sudo", ["-S", "env", `PATH=${pymPath}`, "pymobiledevice3", "remote", "tunneld"], {
+      env: getEnv(),
+      stdio: ["pipe", "pipe", "pipe"],
     });
-    checkReq.on("timeout", () => { checkReq.destroy(); });
+
+    let stderr = "";
+    let resolved = false;
+
+    // Write password to stdin
+    proc.stdin.write(password + "\n");
+    proc.stdin.end();
+
+    // Wait for tunneld to start (check HTTP API)
+    const checkInterval = setInterval(async () => {
+      if (resolved) return;
+      if (await isTunneldRunning()) {
+        resolved = true;
+        clearInterval(checkInterval);
+        clearTimeout(failTimeout);
+        tunneldProcess = proc;
+        tunneldStarted = true;
+        console.log("[geoghost] tunneld is now running");
+        resolve({ alreadyRunning: false });
+      }
+    }, 1000);
+
+    const failTimeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        clearInterval(checkInterval);
+        proc.kill();
+        reject(new Error(stderr.includes("Sorry") ? "Incorrect password" : stderr || "tunneld failed to start within 15s"));
+      }
+    }, 15000);
+
+    proc.stderr.on("data", (data) => {
+      const text = data.toString();
+      // Filter out the password prompt itself
+      if (!text.includes("Password:")) {
+        stderr += text;
+        console.log("[geoghost] tunneld stderr:", text);
+      }
+      // Detect wrong password immediately
+      if (text.includes("Sorry, try again") || text.includes("incorrect password")) {
+        resolved = true;
+        clearInterval(checkInterval);
+        clearTimeout(failTimeout);
+        proc.kill();
+        reject(new Error("Incorrect password"));
+      }
+    });
+
+    proc.stdout.on("data", (data) => {
+      console.log("[geoghost] tunneld stdout:", data.toString());
+    });
+
+    proc.on("close", (code) => {
+      console.log(`[geoghost] tunneld process exited with code ${code}`);
+      if (tunneldProcess === proc) {
+        tunneldProcess = null;
+        tunneldStarted = false;
+      }
+      if (!resolved) {
+        resolved = true;
+        clearInterval(checkInterval);
+        clearTimeout(failTimeout);
+        reject(new Error(stderr || `tunneld exited with code ${code}`));
+      }
+    });
   });
 }
 function run(cmd, timeout = 15000) {
@@ -369,6 +422,22 @@ ipcMain.handle("tunnel:status", async () => {
   };
 });
 
+// Check if tunneld is needed (not already running)
+ipcMain.handle("tunneld:check", async () => {
+  const running = await isTunneldRunning();
+  return { needsPassword: !running };
+});
+
+// Start tunneld with user-provided password
+ipcMain.handle("tunneld:start", async (_event, { password }) => {
+  try {
+    const result = await startTunneldWithPassword(password);
+    return { ok: true, alreadyRunning: result.alreadyRunning };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
 // ─── Helper: spawn a persistent simulate-location process ───
 function spawnSimLocation(args) {
   return new Promise((resolve, reject) => {
@@ -427,13 +496,6 @@ function spawnSimLocation(args) {
 ipcMain.handle("location:set", async (_event, { lat, lng }) => {
   console.log(`[geoghost] location:set called with lat=${lat}, lng=${lng}`);
   console.log(`[geoghost] Current tunnel state: rsdHost=${rsdHost}, rsdPort=${rsdPort}, tunnelProcess=${!!tunnelProcess}`);
-
-  // Auto-start tunneld if not already running (shows macOS password prompt on first use)
-  try {
-    await startTunneld();
-  } catch (err) {
-    console.log("[geoghost] tunneld auto-start skipped:", err.message);
-  }
 
   const udid = await getDeviceUDID();
   console.log(`[geoghost] Device UDID: ${udid}`);

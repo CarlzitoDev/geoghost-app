@@ -12,7 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { setLocation, resetLocation, type DeviceStatus } from "@/lib/device-api";
+import { setLocation, resetLocation, checkTunneld, startTunneld, type DeviceStatus } from "@/lib/device-api";
+import { SudoPasswordDialog } from "@/components/SudoPasswordDialog";
 import { type SavedLocation } from "@/hooks/use-location-storage";
 import { useSettings, TRANSPORT_SPEEDS } from "@/hooks/use-settings";
 import {
@@ -56,7 +57,8 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
   const [locationChanged, setLocationChanged] = useState(false);
   const [mode, setMode] = useState<"static" | "route">("static");
   const [favName, setFavName] = useState("");
-
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [pendingLocationAction, setPendingLocationAction] = useState<(() => Promise<void>) | null>(null);
   // Route state
   const [routeMode, setRouteMode] = useState<"tap" | "draw">("tap");
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
@@ -407,8 +409,45 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     }
   }, [searchQuery, flyTo]);
 
+  const ensureTunneld = useCallback(async (): Promise<boolean> => {
+    try {
+      const { needsPassword } = await checkTunneld();
+      if (!needsPassword) return true;
+      // Need password — show dialog and wait
+      return new Promise((resolve) => {
+        setPendingLocationAction(() => async () => { resolve(true); });
+        setShowPasswordDialog(true);
+        // If dialog is cancelled, resolve false
+        const origOnChange = (open: boolean) => {
+          if (!open) resolve(false);
+        };
+        // Store cancel handler — we'll handle this via onOpenChange
+        (window as any).__tunneldCancel = origOnChange;
+      });
+    } catch {
+      return true; // Non-electron, just proceed
+    }
+  }, []);
+
+  const handlePasswordSubmit = useCallback(async (password: string) => {
+    const res = await startTunneld(password);
+    if (!res.ok) {
+      throw new Error(res.error || "Authentication failed");
+    }
+    // Run pending action
+    if (pendingLocationAction) {
+      await pendingLocationAction();
+      setPendingLocationAction(null);
+    }
+  }, [pendingLocationAction]);
+
   const handleSetLocation = useCallback(async () => {
     if (!canSpoof) { toast.error(!connected ? "No device connected." : "Developer Mode is disabled."); return; }
+    
+    // Check if tunneld needs starting
+    const tunnelReady = await ensureTunneld();
+    if (!tunnelReady) return;
+
     setSettingLocation(true);
     const res = await setLocation(coords.lat, coords.lng);
     setSettingLocation(false);
@@ -419,7 +458,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     } else {
       toast.error(res.error || "Failed to set location");
     }
-  }, [coords, connected, canSpoof, onAddRecent]);
+  }, [coords, connected, canSpoof, onAddRecent, ensureTunneld]);
 
   const handleResetLocation = useCallback(async () => {
     if (!canSpoof) { toast.error(!connected ? "No device connected." : "Developer Mode is disabled."); return; }
@@ -912,6 +951,19 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
           
         </div>
       </div>
+      <SudoPasswordDialog
+        open={showPasswordDialog}
+        onOpenChange={(open) => {
+          setShowPasswordDialog(open);
+          if (!open) {
+            // Trigger cancel
+            const cancel = (window as any).__tunneldCancel;
+            if (cancel) { cancel(false); delete (window as any).__tunneldCancel; }
+            setPendingLocationAction(null);
+          }
+        }}
+        onSubmit={handlePasswordSubmit}
+      />
     </div>
   );
 }

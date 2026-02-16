@@ -16,6 +16,8 @@ interface ElectronAPI {
   resetLocation: () => Promise<{ ok: boolean; error?: string }>;
   startTunnel: () => Promise<{ ok: boolean; host?: string; port?: string; error?: string }>;
   getTunnelStatus: () => Promise<{ active: boolean; host: string | null; port: string | null }>;
+  checkTunneld: () => Promise<{ needsPassword: boolean }>;
+  startTunneld: (password: string) => Promise<{ ok: boolean; alreadyRunning?: boolean; error?: string }>;
 }
 
 declare global {
@@ -82,5 +84,19 @@ export async function resetLocation(): Promise<{ ok: boolean; error?: string }> 
   // Mock fallback
   await delay(500 + Math.random() * 300);
   if (!mockConnected) return { ok: false, error: "No device connected." };
+  return { ok: true };
+}
+
+export async function checkTunneld(): Promise<{ needsPassword: boolean }> {
+  if (isElectron) {
+    return window.electronAPI!.checkTunneld();
+  }
+  return { needsPassword: false };
+}
+
+export async function startTunneld(password: string): Promise<{ ok: boolean; error?: string }> {
+  if (isElectron) {
+    return window.electronAPI!.startTunneld(password);
+  }
   return { ok: true };
 }

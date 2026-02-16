@@ -7,4 +7,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   resetLocation: () => ipcRenderer.invoke("location:reset"),
   startTunnel: () => ipcRenderer.invoke("tunnel:start"),
   getTunnelStatus: () => ipcRenderer.invoke("tunnel:status"),
+  checkTunneld: () => ipcRenderer.invoke("tunneld:check"),
+  startTunneld: (password) => ipcRenderer.invoke("tunneld:start", { password }),
 });
