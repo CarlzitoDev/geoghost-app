@@ -9,6 +9,7 @@ let simLocationProcess = null; // Keep-alive process for simulate-location
 let rsdHost = null;
 let rsdPort = null;
 let tunneldStarted = false; // Track if we already started tunneld
+let tunneldRsdMap = {}; // Map of UDID -> { host, port } parsed from tunneld stderr
 
 const PMD_PATH_EXTRAS = ":/usr/local/bin:/opt/homebrew/bin:/Library/Frameworks/Python.framework/Versions/3.14/bin";
 
@@ -135,6 +136,17 @@ function startTunneldWithPassword(password) {
       if (!text.includes("Password:")) {
         stderr += text;
         console.log("[geoghost] tunneld stderr:", text);
+      }
+      // Parse RSD tunnel info from stderr: "Created tunnel --rsd <host> <port>"
+      // Also capture the UDID from the task name: [start-tunnel-task-usbmux-<UDID>-USB]
+      const tunnelMatch = text.match(/\[start-tunnel-task-[^-]+-([^\]]+?)(?:-USB|-WiFi)?\]\s+Created tunnel --rsd\s+(\S+)\s+(\d+)/);
+      if (tunnelMatch) {
+        const tunnelUdid = tunnelMatch[1];
+        const tunnelHost = tunnelMatch[2];
+        const tunnelPort = tunnelMatch[3];
+        tunneldRsdMap[tunnelUdid] = { host: tunnelHost, port: tunnelPort };
+        console.log(`[geoghost] Parsed tunnel from stderr: UDID=${tunnelUdid} host=${tunnelHost} port=${tunnelPort}`);
+        console.log(`[geoghost] tunneldRsdMap now:`, JSON.stringify(tunneldRsdMap));
       }
       // Detect wrong password immediately
       if (text.includes("Sorry, try again") || text.includes("incorrect password")) {
@@ -299,7 +311,15 @@ async function getDeviceUDID() {
 async function discoverExternalTunnel() {
   const udid = await getDeviceUDID();
   console.log(`[geoghost] discoverExternalTunnel: looking for UDID=${udid}`);
-  // Try querying tunneld HTTP API (if user runs `pymobiledevice3 remote tunneld`)
+
+  // 1. Check our parsed stderr map first (most reliable — exact UDID match from tunneld output)
+  if (udid && tunneldRsdMap[udid]) {
+    const entry = tunneldRsdMap[udid];
+    console.log(`[geoghost] Found tunnel in stderr map: UDID=${udid} host=${entry.host} port=${entry.port}`);
+    return { host: entry.host, port: entry.port };
+  }
+
+  // 2. Try HTTP API as fallback (some pymobiledevice3 versions support /tunnels)
   try {
     const http = require("http");
     const data = await new Promise((resolve, reject) => {
@@ -312,58 +332,34 @@ async function discoverExternalTunnel() {
       req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); });
     });
     const tunnels = JSON.parse(data);
-    console.log("[geoghost] tunneld full response:", JSON.stringify(tunnels).substring(0, 2000));
+    console.log("[geoghost] tunneld HTTP response:", JSON.stringify(tunnels).substring(0, 2000));
 
-    // tunneld returns an object keyed by UDID or a list
-    let tunnelList = [];
-    if (Array.isArray(tunnels)) {
-      tunnelList = tunnels;
-    } else if (tunnels && typeof tunnels === "object") {
-      for (const [key, val] of Object.entries(tunnels)) {
-        if (val && typeof val === "object") {
-          tunnelList.push({ ...val, _key: key });
+    if (tunnels && tunnels.detail) {
+      console.log("[geoghost] tunneld HTTP API returned error, skipping");
+    } else {
+      let tunnelList = [];
+      if (Array.isArray(tunnels)) {
+        tunnelList = tunnels;
+      } else if (typeof tunnels === "object") {
+        for (const [key, val] of Object.entries(tunnels)) {
+          if (val && typeof val === "object") {
+            tunnelList.push({ ...val, _key: key });
+          }
+        }
+      }
+      if (udid) {
+        const match = tunnelList.find(t => t._key === udid || t.udid === udid || t.identifier === udid);
+        if (match && match.address && match.port) {
+          console.log(`[geoghost] Matched tunnel via HTTP: ${match.address} ${match.port}`);
+          return { host: match.address, port: String(match.port) };
         }
       }
     }
-
-    console.log(`[geoghost] Found ${tunnelList.length} tunnels. Keys: ${tunnelList.map(t => t._key || "?").join(", ")}`);
-
-    // STRICT: Only match by our USB-connected iPhone's UDID — never fall back to random device
-    let match = null;
-    if (udid) {
-      match = tunnelList.find(t => t._key === udid || t.udid === udid || t.identifier === udid);
-    }
-
-    // If no UDID match, try to filter out non-iPhone devices (Macs, AirPods, etc.)
-    if (!match && tunnelList.length > 0) {
-      // Look for entries that look like an iPhone (exclude keys that look like Mac UDIDs or have no tunnel)
-      // Only pick if there's exactly ONE tunnel left after filtering — avoid guessing
-      const candidates = tunnelList.filter(t => {
-        const key = (t._key || "").toLowerCase();
-        const name = (t.name || t.deviceName || "").toLowerCase();
-        // Skip entries clearly not an iPhone
-        if (name.includes("macbook") || name.includes("imac") || name.includes("mac")) return false;
-        if (name.includes("airpods") || name.includes("watch")) return false;
-        return t.address && t.port;
-      });
-      if (candidates.length === 1) {
-        match = candidates[0];
-        console.log(`[geoghost] Single non-Mac/AirPods candidate found: ${match._key}`);
-      } else {
-        console.log(`[geoghost] ${candidates.length} candidates after filtering — not picking to avoid wrong device`);
-      }
-    }
-
-    if (match && match.address && match.port) {
-      console.log(`[geoghost] Discovered tunnel via tunneld: ${match.address} ${match.port} (key: ${match._key || "n/a"})`);
-      return { host: match.address, port: match.port };
-    } else {
-      console.log("[geoghost] No matching iPhone tunnel found");
-    }
   } catch (err) {
-    console.log("[geoghost] tunneld not running or not responding:", err.message);
+    console.log("[geoghost] tunneld HTTP not available:", err.message);
   }
 
+  console.log("[geoghost] No matching iPhone tunnel found");
   return null;
 }
 
