@@ -9,6 +9,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { toast } from "sonner";
 import { setLocation, resetLocation, type DeviceStatus } from "@/lib/mock-api";
 import { type SavedLocation } from "@/hooks/use-location-storage";
+import { useSettings } from "@/hooks/use-settings";
 
 const MAPBOX_TOKEN = "pk.eyJ1IjoiY2FybHppdG8iLCJhIjoiY21scGRkMWRsMWFtODNlcXcwa25yNnprcSJ9.KE1oBQcON-JrySAX_HlKKg";
 const DEFAULT_CENTER: [number, number] = [-122.4194, 37.7749];
@@ -23,6 +24,7 @@ interface MapPanelProps {
 }
 
 export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRemoveFavorite, onAddRecent }: MapPanelProps) {
+  const { settings } = useSettings();
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markerRef = useRef<mapboxgl.Marker | null>(null);
@@ -77,6 +79,19 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
 
     return () => { map.remove(); mapRef.current = null; };
   }, []);
+
+  // Switch map style when setting changes
+  const MAP_STYLES: Record<string, string> = {
+    dark: "mapbox://styles/mapbox/dark-v11",
+    satellite: "mapbox://styles/mapbox/satellite-streets-v12",
+    streets: "mapbox://styles/mapbox/streets-v12",
+  };
+
+  useEffect(() => {
+    if (mapRef.current) {
+      mapRef.current.setStyle(MAP_STYLES[settings.mapStyle] || MAP_STYLES.dark);
+    }
+  }, [settings.mapStyle]);
 
   const flyTo = useCallback((lat: number, lng: number) => {
     setCoords({ lat, lng });
@@ -223,7 +238,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
       const wp = waypoints[idx];
       flyTo(wp.lat, wp.lng);
       simulationIndex.current++;
-    }, 1500);
+    }, settings.simulationSpeed * 1000);
   }, [simulating, waypoints, connected, flyTo]);
 
   return (

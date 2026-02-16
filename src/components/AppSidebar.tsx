@@ -1,9 +1,11 @@
-import { Ghost, MapPin, Settings } from "lucide-react";
+import { Ghost, MapPin, Settings, HelpCircle } from "lucide-react";
 import { useState } from "react";
 import { HelpPanel } from "./HelpPanel";
+import { SettingsPanel } from "./SettingsPanel";
 
 export function AppSidebar() {
   const [helpOpen, setHelpOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
     <>
@@ -28,17 +30,27 @@ export function AppSidebar() {
           </button>
         </nav>
 
-        {/* Settings at bottom */}
-        <button
-          onClick={() => setHelpOpen(true)}
-          className="group flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-secondary hover:text-foreground"
-          title="Settings & Help"
-        >
-          <Settings className="h-4.5 w-4.5 transition-transform group-hover:rotate-45" />
-        </button>
+        {/* Bottom icons */}
+        <div className="flex flex-col items-center gap-2">
+          <button
+            onClick={() => setHelpOpen(true)}
+            className="group flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-secondary hover:text-foreground"
+            title="Help & Setup"
+          >
+            <HelpCircle className="h-4.5 w-4.5" />
+          </button>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="group flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-secondary hover:text-foreground"
+            title="Settings"
+          >
+            <Settings className="h-4.5 w-4.5 transition-transform group-hover:rotate-45" />
+          </button>
+        </div>
       </aside>
 
       <HelpPanel open={helpOpen} onOpenChange={setHelpOpen} />
+      <SettingsPanel open={settingsOpen} onOpenChange={setSettingsOpen} />
     </>
   );
 }
