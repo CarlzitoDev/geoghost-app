@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { setLocation, resetLocation, type DeviceStatus } from "@/lib/device-api";
+import { setLocation, resetLocation, getDeviceLocation, type DeviceStatus } from "@/lib/device-api";
 import { type SavedLocation } from "@/hooks/use-location-storage";
 import { useSettings, TRANSPORT_SPEEDS } from "@/hooks/use-settings";
 import {
@@ -100,20 +100,26 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     mapRef.current = map;
     markerRef.current = marker;
 
-    // Center map on user's real location
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          const userPos: [number, number] = [longitude, latitude];
-          map.flyTo({ center: userPos, zoom: 13 });
-          marker.setLngLat(userPos);
-          setCoords({ lat: parseFloat(latitude.toFixed(6)), lng: parseFloat(longitude.toFixed(6)) });
-        },
-        () => { /* keep default center on error */ },
-        { enableHighAccuracy: false, timeout: 5000 }
-      );
-    }
+    // Center map on device location (Electron) or browser geolocation (web)
+    const centerOnLocation = (lat: number, lng: number) => {
+      const pos: [number, number] = [lng, lat];
+      map.flyTo({ center: pos, zoom: 13 });
+      marker.setLngLat(pos);
+      setCoords({ lat: parseFloat(lat.toFixed(6)), lng: parseFloat(lng.toFixed(6)) });
+    };
+
+    // Try phone location first (Electron), fall back to browser geolocation
+    getDeviceLocation().then((res) => {
+      if (res.ok && res.lat !== undefined && res.lng !== undefined) {
+        centerOnLocation(res.lat, res.lng);
+      } else if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => centerOnLocation(position.coords.latitude, position.coords.longitude),
+          () => { /* keep default */ },
+          { enableHighAccuracy: false, timeout: 5000 }
+        );
+      }
+    });
 
     return () => { map.remove(); mapRef.current = null; };
   }, []);
