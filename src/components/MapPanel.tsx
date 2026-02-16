@@ -100,6 +100,21 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     mapRef.current = map;
     markerRef.current = marker;
 
+    // Center map on user's real location
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const userPos: [number, number] = [longitude, latitude];
+          map.flyTo({ center: userPos, zoom: 13 });
+          marker.setLngLat(userPos);
+          setCoords({ lat: parseFloat(latitude.toFixed(6)), lng: parseFloat(longitude.toFixed(6)) });
+        },
+        () => { /* keep default center on error */ },
+        { enableHighAccuracy: false, timeout: 5000 }
+      );
+    }
+
     return () => { map.remove(); mapRef.current = null; };
   }, []);
 
