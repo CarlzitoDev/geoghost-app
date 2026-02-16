@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { Search, Star, Clock, MapPin, Navigation, Play, Pause, Plus, Trash2, Loader2 } from "lucide-react";
@@ -416,9 +416,29 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
                   </Button>
                 )}
               </div>
-              <p className="text-[10px] text-muted-foreground">
-                {waypoints.length} waypoint{waypoints.length !== 1 ? "s" : ""} · {TRANSPORT_SPEEDS[settings.transportMode].emoji} {TRANSPORT_SPEEDS[settings.transportMode].label} ({TRANSPORT_SPEEDS[settings.transportMode].speed} km/h)
-              </p>
+              {(() => {
+                const haversine = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+                  const R = 6371;
+                  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+                  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+                  const sinLat = Math.sin(dLat / 2);
+                  const sinLng = Math.sin(dLng / 2);
+                  const h = sinLat * sinLat + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * sinLng * sinLng;
+                  return 2 * R * Math.asin(Math.sqrt(h));
+                };
+                const totalKm = waypoints.reduce((sum, wp, i) => i === 0 ? 0 : sum + haversine(waypoints[i - 1], wp), 0);
+                const speed = TRANSPORT_SPEEDS[settings.transportMode].speed;
+                const totalMin = Math.round((totalKm / speed) * 60);
+                const etaStr = totalMin < 1 ? "<1 min" : totalMin < 60 ? `${totalMin} min` : `${Math.floor(totalMin / 60)}h ${totalMin % 60}m`;
+                const distStr = totalKm < 1 ? `${Math.round(totalKm * 1000)} m` : `${totalKm.toFixed(1)} km`;
+                return (
+                  <p className="text-[10px] text-muted-foreground">
+                    {waypoints.length} waypoint{waypoints.length !== 1 ? "s" : ""}
+                    {waypoints.length >= 2 && <> · {distStr} · ~{etaStr}</>}
+                    {" "}· {TRANSPORT_SPEEDS[settings.transportMode].emoji} {TRANSPORT_SPEEDS[settings.transportMode].label}
+                  </p>
+                );
+              })()}
             </TabsContent>
           </Tabs>
 
