@@ -2,8 +2,8 @@ import { useState, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getDeviceStatus, toggleDeviceConnection, type DeviceStatus } from "@/lib/mock-api";
-import { RefreshCw, Wifi, WifiOff, ChevronDown, ChevronUp, Cable, Smartphone, ShieldCheck } from "lucide-react";
+import { getDeviceStatus, toggleDeviceConnection, toggleDevMode, type DeviceStatus } from "@/lib/mock-api";
+import { RefreshCw, Wifi, WifiOff, ChevronDown, ChevronUp, Cable, Smartphone, ShieldCheck, ShieldAlert } from "lucide-react";
 
 interface DeviceStatusCardProps {
   status: DeviceStatus | null;
@@ -14,6 +14,12 @@ interface DeviceStatusCardProps {
 export function DeviceStatusCard({ status, onRefresh, loading }: DeviceStatusCardProps) {
   const [expanded, setExpanded] = useState(false);
   const connected = status?.connected ?? false;
+  const devMode = status?.developerMode ?? false;
+  const dotClass = !connected
+    ? "bg-destructive shadow-[0_0_6px_hsl(0,72%,55%)]"
+    : !devMode
+      ? "bg-yellow-500 shadow-[0_0_6px_hsl(45,100%,50%)]"
+      : "bg-primary shadow-[0_0_6px_hsl(142,72%,50%)]";
 
   return (
     <div className="space-y-1">
@@ -22,7 +28,7 @@ export function DeviceStatusCard({ status, onRefresh, loading }: DeviceStatusCar
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm transition-colors hover:bg-secondary"
       >
-        <span className={`h-2.5 w-2.5 rounded-full ${connected ? "bg-primary shadow-[0_0_6px_hsl(142,72%,50%)]" : "bg-destructive shadow-[0_0_6px_hsl(0,72%,55%)]"}`} />
+        <span className={`h-2.5 w-2.5 rounded-full ${dotClass}`} />
         <span className="text-foreground">{connected ? status?.name : "No Device"}</span>
         {expanded ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
       </button>
@@ -45,6 +51,15 @@ export function DeviceStatusCard({ status, onRefresh, loading }: DeviceStatusCar
                   <span className="text-muted-foreground">Connection</span>
                   <span className="text-foreground">{status.connection}</span>
                 </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Developer Mode</span>
+                  <span className={devMode ? "text-primary" : "text-yellow-500 flex items-center gap-1"}>
+                    {devMode ? "Enabled" : <><ShieldAlert className="h-3.5 w-3.5" /> Disabled</>}
+                  </span>
+                </div>
+                {!devMode && (
+                  <p className="text-[10px] text-yellow-500">⚠ Enable Developer Mode on your device for full functionality.</p>
+                )}
               </div>
             ) : (
               <div className="space-y-2">
@@ -85,6 +100,16 @@ export function DeviceStatusCard({ status, onRefresh, loading }: DeviceStatusCar
               >
                 {connected ? "Simulate Disconnect" : "Simulate Connect"}
               </Button>
+              {connected && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => { toggleDevMode(); onRefresh(); }}
+                  className="text-xs"
+                >
+                  {devMode ? "Disable Dev" : "Enable Dev"}
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
