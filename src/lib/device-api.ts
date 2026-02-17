@@ -9,9 +9,18 @@ export interface DeviceStatus {
   error?: string;
 }
 
+export interface DeviceInfo {
+  udid: string;
+  name: string;
+  ios: string;
+  connection: string;
+}
+
 // Type-safe access to the Electron bridge injected by preload.js
 interface ElectronAPI {
   getDeviceStatus: () => Promise<DeviceStatus>;
+  listDevices: () => Promise<{ devices: DeviceInfo[]; error?: string }>;
+  selectDevice: (udid: string) => Promise<{ ok: boolean }>;
   setLocation: (lat: number, lng: number) => Promise<{ ok: boolean; error?: string }>;
   resetLocation: () => Promise<{ ok: boolean; error?: string }>;
   startTunnel: () => Promise<{ ok: boolean; host?: string; port?: string; error?: string }>;
@@ -47,6 +56,28 @@ export function setDeviceConnected(val: boolean) {
 }
 
 // ─── Unified API ───
+
+export async function listDevices(): Promise<DeviceInfo[]> {
+  if (isElectron) {
+    const res = await window.electronAPI!.listDevices();
+    return res.devices || [];
+  }
+  // Mock fallback
+  await delay(300);
+  return mockConnected
+    ? [
+        { udid: "mock-udid-1", name: "iPhone 15 Pro", ios: "17.4.1", connection: "USB" },
+        { udid: "mock-udid-2", name: "iPhone 14", ios: "16.7.2", connection: "USB" },
+      ]
+    : [];
+}
+
+export async function selectDevice(udid: string): Promise<{ ok: boolean }> {
+  if (isElectron) {
+    return window.electronAPI!.selectDevice(udid);
+  }
+  return { ok: true };
+}
 
 export async function getDeviceStatus(): Promise<DeviceStatus> {
   if (isElectron) {
