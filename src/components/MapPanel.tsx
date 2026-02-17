@@ -4,7 +4,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import {
   Search, Star, Clock, MapPin, Navigation, Play, Pause,
   Trash2, Loader2, Undo2, Pencil, MousePointerClick,
-  Upload, Download, RefreshCw,
+  Upload, Download, RefreshCw, Check, Smartphone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { setLocation, resetLocation, checkTunneld, startTunneld, type DeviceStatus } from "@/lib/device-api";
+import { setLocation, resetLocation, checkTunneld, startTunneld, listDevices, selectDevice, type DeviceStatus, type DeviceInfo } from "@/lib/device-api";
 import { SudoPasswordDialog } from "@/components/SudoPasswordDialog";
 import { type SavedLocation } from "@/hooks/use-location-storage";
 import { useSettings, TRANSPORT_SPEEDS } from "@/hooks/use-settings";
@@ -73,7 +73,8 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
   const simulationRef = useRef<number | null>(null);
   const gpxInputRef = useRef<HTMLInputElement>(null);
   const [undoStack, setUndoStack] = useState<Waypoint[][]>([]);
-
+  const [deviceList, setDeviceList] = useState<DeviceInfo[]>([]);
+  const [selectedUdid, setSelectedUdid] = useState<string | null>(null);
   const connected = deviceStatus?.connected ?? false;
   const devMode = deviceStatus?.developerMode ?? false;
   const canSpoof = connected && devMode;
@@ -662,16 +663,22 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
       {/* ═══ TOP BAR ═══ */}
       <div className="absolute top-0 left-0 right-0 z-20 flex items-center gap-3 px-4 py-3">
         {/* Device status chip */}
-        <Popover>
+        <Popover onOpenChange={async (open) => {
+          if (open) {
+            const devices = await listDevices();
+            setDeviceList(devices);
+          }
+        }}>
           <PopoverTrigger asChild>
             <button className="flex items-center gap-2 rounded-full bg-secondary/60 px-3 py-1.5 text-xs transition-all hover:bg-secondary/80 shrink-0">
               <span className={`h-2 w-2 rounded-full ${connected ? "bg-primary shadow-[0_0_6px_hsl(145,72%,46%)]" : "bg-destructive shadow-[0_0_6px_hsl(0,68%,52%)]"}`} />
               <span className="text-foreground font-medium">{connected ? deviceStatus?.name : "No Device"}</span>
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-64 p-3 bg-popover z-50" align="start">
+          <PopoverContent className="w-72 p-3 bg-popover z-50" align="start">
             {connected && deviceStatus ? (
-              <div className="space-y-2 text-xs">
+              <div className="space-y-3 text-xs">
+                {/* Device info */}
                 {[
                   { label: "Device", value: deviceStatus.name },
                   { label: "iOS", value: deviceStatus.ios },
@@ -688,6 +695,42 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
                     {devMode ? "Enabled" : "Disabled"}
                   </span>
                 </div>
+
+                {/* Device selector */}
+                {deviceList.length > 1 && (
+                  <div className="pt-2 border-t border-border/30 space-y-1.5">
+                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Switch Device</span>
+                    <div className="space-y-1">
+                      {deviceList.map((d) => {
+                        const isSelected = selectedUdid ? d.udid === selectedUdid : d.name === deviceStatus.name;
+                        return (
+                          <button
+                            key={d.udid}
+                            onClick={async () => {
+                              setSelectedUdid(d.udid);
+                              await selectDevice(d.udid);
+                              onRefreshDevice();
+                              toast.success(`Switched to ${d.name}`);
+                            }}
+                            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-colors ${
+                              isSelected
+                                ? "bg-primary/10 text-primary"
+                                : "hover:bg-secondary/60 text-foreground"
+                            }`}
+                          >
+                            <Smartphone className="h-3.5 w-3.5 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium truncate">{d.name}</div>
+                              <div className="text-[10px] text-muted-foreground">iOS {d.ios} · {d.connection}</div>
+                            </div>
+                            {isSelected && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <Button size="sm" variant="secondary" onClick={onRefreshDevice} disabled={deviceLoading} className="w-full h-7 text-[11px] mt-1">
                   <RefreshCw className={`h-3 w-3 mr-1 ${deviceLoading ? "animate-spin" : ""}`} /> Refresh
                 </Button>

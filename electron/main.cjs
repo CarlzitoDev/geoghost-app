@@ -365,6 +365,46 @@ async function discoverExternalTunnel() {
 
 // ─── IPC Handlers ───
 
+// ─── List all connected devices ───
+ipcMain.handle("device:list", async () => {
+  if (!hasPyMobileDevice()) return { devices: [], error: "pymobiledevice3 not installed" };
+  try {
+    let output;
+    try {
+      output = await run("pymobiledevice3 usbmux list --no-color -o json");
+    } catch {
+      output = await run("pymobiledevice3 usbmux list");
+    }
+    let devices;
+    try {
+      devices = JSON.parse(output);
+    } catch {
+      return { devices: [] };
+    }
+    const deviceList = Array.isArray(devices) ? devices : [devices];
+    return {
+      devices: deviceList.map((d) => ({
+        udid: d.UniqueDeviceID || d.SerialNumber || d.UDID || "",
+        name: d.DeviceName || d.ProductType || d.Name || "iOS Device",
+        ios: d.ProductVersion || d.iOSVersion || "",
+        connection: d.ConnectionType || "USB",
+      })),
+    };
+  } catch (err) {
+    return { devices: [], error: err.message };
+  }
+});
+
+// ─── Select a specific device by UDID ───
+ipcMain.handle("device:select", async (_event, { udid }) => {
+  console.log(`[geoghost] Selecting device UDID: ${udid}`);
+  cachedUDID = udid;
+  // Clear cached tunnel params so next location:set rediscovers for the new device
+  rsdHost = null;
+  rsdPort = null;
+  return { ok: true };
+});
+
 ipcMain.handle("device:status", async () => {
   if (!hasPyMobileDevice()) {
     return {
@@ -407,8 +447,12 @@ ipcMain.handle("device:status", async () => {
       return { connected: false, name: "", ios: "", connection: "", developerMode: false };
     }
 
-    const device = deviceList[0];
-    // Cache UDID for tunnel discovery
+    // If a device is selected, find it; otherwise use first
+    let device = deviceList[0];
+    if (cachedUDID) {
+      const match = deviceList.find(d => (d.UniqueDeviceID || d.SerialNumber || d.UDID) === cachedUDID);
+      if (match) device = match;
+    }
     cachedUDID = device.UniqueDeviceID || device.SerialNumber || device.UDID || null;
     return {
       connected: true,
