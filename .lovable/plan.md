@@ -1,106 +1,60 @@
 
-# Package GeoGhost as a Desktop .exe
 
-Since Lovable is a web-based editor, it **cannot** run Electron, install native dependencies, or build `.exe` files. This needs to be done on your local machine. Here's the exact step-by-step:
+## Route Simulation Modes and Settings Reorganization
 
-## Prerequisites
+### 1. New Route Simulation Modes
 
-- **Node.js** (v18+) installed on your PC
-- **Git** installed
-- **Python 3** + `pymobiledevice3` installed (`pip3 install pymobiledevice3`)
+Adding a new `simulationMode` setting with three distinct movement behaviors:
 
-## Steps
+- **Smooth** (default) -- The current behavior. The marker moves fluidly along the route at a realistic pace based on transport speed. Best for apps that track continuous movement.
+- **Interval** -- Teleports the marker to the next point along the route every few seconds (configurable: 3s, 5s, 10s). Simulates how some apps poll location infrequently. Useful for check-in style apps.
+- **Instant** -- Jumps directly to the final destination with no animation. Fastest option for when you just need to appear somewhere without simulating travel.
 
-### 1. Clone your repo
+A new `intervalSeconds` setting (default: 5) controls the teleport frequency for Interval mode.
 
-```text
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git
-cd YOUR_REPO
-```
+### 2. Settings Panel Reorganization
 
-### 2. Install dependencies
+Grouping settings into cleaner, collapsible categories using accordion sections:
 
 ```text
-npm install
-npm install --save-dev electron electron-builder concurrently wait-on
++----------------------------------+
+|  APPEARANCE                      |
+|    Map Style          [Dark v]   |
+|    Coordinate Format  [Decimal]  |
++----------------------------------+
+|  SIMULATION                      |
+|    Transport Mode  [Walk|Bike|Car]|
+|    Simulation Mode [Smooth|...]  |
+|    Teleport Interval  [5s v]     |
+|      (only visible in Interval)  |
++----------------------------------+
+|  HISTORY                         |
+|    Auto-save recents   [toggle]  |
+|    Max recent locations [10 v]   |
++----------------------------------+
+|  ADVANCED (destructive border)   |
+|    Tunnel Mode        [Auto v]   |
++----------------------------------+
+|  [Reset to defaults]             |
++----------------------------------+
 ```
 
-### 3. Update `package.json`
+### Technical Details
 
-Add these fields at the top level:
+**File: `src/hooks/use-settings.ts`**
+- Add `simulationMode: "smooth" | "interval" | "instant"` to `AppSettings` (default: `"smooth"`)
+- Add `intervalSeconds: number` to `AppSettings` (default: `5`)
+- Export `SimulationMode` type and a `SIMULATION_MODES` descriptor record (similar to `TRANSPORT_SPEEDS`)
 
-```text
-"main": "electron/main.js",
-```
+**File: `src/components/SettingsPanel.tsx`**
+- Reorganize into four visual groups: Appearance, Simulation, History, Advanced
+- Move Map Style and Coordinate Format under "Appearance"
+- Move Transport Mode under "Simulation" and add the new Simulation Mode selector (3 styled cards similar to transport mode) and a conditional Interval selector
+- Keep History and Advanced sections as they are
+- Use cleaner section headers with consistent spacing
 
-Add/replace these scripts:
-
-```text
-"scripts": {
-  "dev": "vite",
-  "build": "vite build",
-  "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DEV=true electron .\"",
-  "electron:build": "vite build && electron-builder --win"
-}
-```
-
-Add a `build` config for electron-builder:
-
-```text
-"build": {
-  "appId": "com.geoghost.app",
-  "productName": "GeoGhost",
-  "directories": {
-    "output": "release"
-  },
-  "files": [
-    "dist/**/*",
-    "electron/**/*"
-  ],
-  "win": {
-    "target": "nsis",
-    "icon": "public/favicon.ico"
-  }
-}
-```
-
-### 4. Fix Vite config for Electron
-
-In `vite.config.ts`, change the dev server port to `5173` (or update the Electron `main.js` URL to match port `8080`). The simplest fix: in `electron/main.js`, change `http://localhost:5173` to `http://localhost:8080`.
-
-Also add `base: "./"` to `vite.config.ts` so built files use relative paths:
-
-```text
-export default defineConfig(({ mode }) => ({
-  base: "./",
-  ...
-}));
-```
-
-### 5. Test in dev mode
-
-```text
-npm run electron:dev
-```
-
-This opens your app in a native window. Connect your iPhone via USB to test real location spoofing.
-
-### 6. Build the .exe
-
-```text
-npm run electron:build
-```
-
-Your installer will appear in the `release/` folder as a `.exe` file.
-
-## Summary
-
-| Step | Where | Command |
-|------|-------|---------|
-| Clone repo | Your PC terminal | `git clone ...` |
-| Install deps | Your PC terminal | `npm install && npm install -D electron electron-builder concurrently wait-on` |
-| Edit package.json | Your code editor | Add main, scripts, build config |
-| Dev test | Your PC terminal | `npm run electron:dev` |
-| Build .exe | Your PC terminal | `npm run electron:build` |
-
-All the Electron files (`electron/main.js`, `electron/preload.js`) and the device API (`src/lib/device-api.ts`) are already in your GitHub repo from our earlier work. You just need to install the Electron packages locally and build.
+**File: `src/components/MapPanel.tsx`**
+- Update `toggleSimulation` to read `settings.simulationMode`:
+  - **smooth**: Current `requestAnimationFrame` loop with 200ms ticks (no changes)
+  - **interval**: Use `setInterval` at `settings.intervalSeconds * 1000`. Each tick jumps to the proportionally next point along the route (skipping intermediate steps)
+  - **instant**: Immediately set location to the last waypoint, update marker, show success toast. No animation loop at all
