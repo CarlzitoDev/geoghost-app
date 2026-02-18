@@ -1,20 +1,26 @@
 
+## Route Simulation Modes + Settings Reorganization
 
-## Route Simulation Modes and Settings Reorganization
+### What's changing
 
-### 1. New Route Simulation Modes
+Two new simulation modes (no "Instant"), cleaner grouped settings, and an immediate device name update in the top bar when switching devices.
 
-Adding a new `simulationMode` setting with three distinct movement behaviors:
+---
 
-- **Smooth** (default) -- The current behavior. The marker moves fluidly along the route at a realistic pace based on transport speed. Best for apps that track continuous movement.
-- **Interval** -- Teleports the marker to the next point along the route every few seconds (configurable: 3s, 5s, 10s). Simulates how some apps poll location infrequently. Useful for check-in style apps.
-- **Instant** -- Jumps directly to the final destination with no animation. Fastest option for when you just need to appear somewhere without simulating travel.
+### Simulation Modes
 
-A new `intervalSeconds` setting (default: 5) controls the teleport frequency for Interval mode.
+| Mode | How it works |
+|---|---|
+| **Smooth** (default) | Current behavior — marker glides continuously along the route at realistic speed (walk/bike/drive). Nothing changes here. |
+| **Interval** | Marker teleports to the next position every N seconds. Configurable at 3s, 5s, or 10s. Useful for simulating apps that poll location infrequently rather than streaming it. |
 
-### 2. Settings Panel Reorganization
+"Instant" is excluded — it defeats the purpose of a route.
 
-Grouping settings into cleaner, collapsible categories using accordion sections:
+---
+
+### Settings Layout
+
+Sections are grouped visually with clear headers. No accordion — just clean dividers and consistent section labels.
 
 ```text
 +----------------------------------+
@@ -23,38 +29,45 @@ Grouping settings into cleaner, collapsible categories using accordion sections:
 |    Coordinate Format  [Decimal]  |
 +----------------------------------+
 |  SIMULATION                      |
-|    Transport Mode  [Walk|Bike|Car]|
-|    Simulation Mode [Smooth|...]  |
-|    Teleport Interval  [5s v]     |
-|      (only visible in Interval)  |
+|    Transport Mode [Walk|Bike|Car] |
+|    Movement Mode  [Smooth|Interval]|
+|    Teleport Interval   [5s v]    |
+|      (only shown for Interval)   |
 +----------------------------------+
 |  HISTORY                         |
 |    Auto-save recents   [toggle]  |
 |    Max recent locations [10 v]   |
 +----------------------------------+
-|  ADVANCED (destructive border)   |
+|  ADVANCED                        |
 |    Tunnel Mode        [Auto v]   |
 +----------------------------------+
 |  [Reset to defaults]             |
 +----------------------------------+
 ```
 
+---
+
+### Device Chip Fix
+
+When you tap a device in the popover to switch, the chip in the top bar will immediately update to the new device name rather than waiting for the background refresh to complete.
+
+---
+
 ### Technical Details
 
-**File: `src/hooks/use-settings.ts`**
-- Add `simulationMode: "smooth" | "interval" | "instant"` to `AppSettings` (default: `"smooth"`)
-- Add `intervalSeconds: number` to `AppSettings` (default: `5`)
-- Export `SimulationMode` type and a `SIMULATION_MODES` descriptor record (similar to `TRANSPORT_SPEEDS`)
+**`src/hooks/use-settings.ts`**
+- Add `simulationMode: "smooth" | "interval"` (default: `"smooth"`)
+- Add `intervalSeconds: 3 | 5 | 10` (default: `5`)
+- Export `SimulationMode` type and a `SIMULATION_MODES` descriptor object with label + description for each mode
 
-**File: `src/components/SettingsPanel.tsx`**
-- Reorganize into four visual groups: Appearance, Simulation, History, Advanced
-- Move Map Style and Coordinate Format under "Appearance"
-- Move Transport Mode under "Simulation" and add the new Simulation Mode selector (3 styled cards similar to transport mode) and a conditional Interval selector
-- Keep History and Advanced sections as they are
-- Use cleaner section headers with consistent spacing
+**`src/components/SettingsPanel.tsx`**
+- Merge "Map" + "Coordinates" into a single **Appearance** section
+- Add **Simulation** section with: transport mode cards (existing), movement mode cards (new — 2 cards styled same as transport), and a conditional interval selector that only appears when "Interval" is selected
+- Keep **History** and **Advanced** sections as-is, just re-ordered
 
-**File: `src/components/MapPanel.tsx`**
-- Update `toggleSimulation` to read `settings.simulationMode`:
-  - **smooth**: Current `requestAnimationFrame` loop with 200ms ticks (no changes)
-  - **interval**: Use `setInterval` at `settings.intervalSeconds * 1000`. Each tick jumps to the proportionally next point along the route (skipping intermediate steps)
-  - **instant**: Immediately set location to the last waypoint, update marker, show success toast. No animation loop at all
+**`src/components/MapPanel.tsx`**
+- Add `switchedDeviceName` local state; set it immediately on device switch; use it in the chip display with a `useEffect` to clear it once `deviceStatus.name` catches up
+- In `toggleSimulation`, branch on `settings.simulationMode`:
+  - `"smooth"` — existing `requestAnimationFrame` loop (no changes)
+  - `"interval"` — use `setInterval` instead of `requestAnimationFrame`. Each tick advances to the next proportional position along the pre-computed steps array, jumping forward by `(totalSteps / (totalDistanceKm / speedKmh * 3600 / intervalSeconds))` steps per tick. Store the interval ID in `simulationRef` (reusing the same ref, just cast to `number`). Cancel with `clearInterval` on stop.
+- The stop-simulation branch needs to handle both `cancelAnimationFrame` and `clearInterval` depending on current mode — tracked via a `simModeRef` ref to avoid stale closures.
