@@ -21,8 +21,19 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { RotateCcw, Map, Route, Bookmark, Hash, Footprints, Bike, Car, ShieldAlert, Wifi } from "lucide-react";
-import { useSettings, TRANSPORT_SPEEDS, type AppSettings, type TransportMode, type TunnelMode } from "@/hooks/use-settings";
+import {
+  RotateCcw, Footprints, Bike, Car, ShieldAlert, Wifi,
+  Palette, Route, Bookmark, Waves, Timer,
+} from "lucide-react";
+import {
+  useSettings,
+  TRANSPORT_SPEEDS,
+  SIMULATION_MODES,
+  type AppSettings,
+  type TransportMode,
+  type TunnelMode,
+  type SimulationMode,
+} from "@/hooks/use-settings";
 
 interface SettingsPanelProps {
   open: boolean;
@@ -50,68 +61,63 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
         </SheetHeader>
 
         <div className="space-y-6">
-          {/* Map Style */}
+
+          {/* ── APPEARANCE ── */}
           <section className="space-y-3">
             <h3 className="flex items-center gap-2 text-[11px] font-semibold text-primary uppercase tracking-wider">
-              <Map className="h-3.5 w-3.5" />
-              Map
+              <Palette className="h-3.5 w-3.5" />
+              Appearance
             </h3>
-            <div className="flex items-center justify-between">
-              <Label className="text-xs text-muted-foreground">Map Style</Label>
-              <Select
-                value={settings.mapStyle}
-                onValueChange={(v) => update({ mapStyle: v as AppSettings["mapStyle"] })}
-              >
-                <SelectTrigger className="w-28 h-7 text-[11px] bg-secondary/50 border-border/60">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-card border-border">
-                  <SelectItem value="dark" className="text-xs">Dark</SelectItem>
-                  <SelectItem value="satellite" className="text-xs">Satellite</SelectItem>
-                  <SelectItem value="streets" className="text-xs">Streets</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground">Map Style</Label>
+                <Select
+                  value={settings.mapStyle}
+                  onValueChange={(v) => update({ mapStyle: v as AppSettings["mapStyle"] })}
+                >
+                  <SelectTrigger className="w-28 h-7 text-[11px] bg-secondary/50 border-border/60">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    <SelectItem value="dark" className="text-xs">Dark</SelectItem>
+                    <SelectItem value="satellite" className="text-xs">Satellite</SelectItem>
+                    <SelectItem value="streets" className="text-xs">Streets</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground">Coordinates</Label>
+                <Select
+                  value={settings.coordinateFormat}
+                  onValueChange={(v) => update({ coordinateFormat: v as AppSettings["coordinateFormat"] })}
+                >
+                  <SelectTrigger className="w-28 h-7 text-[11px] bg-secondary/50 border-border/60">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    <SelectItem value="decimal" className="text-xs">Decimal</SelectItem>
+                    <SelectItem value="dms" className="text-xs">DMS</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </section>
 
           <Separator className="bg-border/40" />
 
-          {/* Coordinates */}
-          <section className="space-y-3">
-            <h3 className="flex items-center gap-2 text-[11px] font-semibold text-primary uppercase tracking-wider">
-              <Hash className="h-3.5 w-3.5" />
-              Coordinates
-            </h3>
-            <div className="flex items-center justify-between">
-              <Label className="text-xs text-muted-foreground">Format</Label>
-              <Select
-                value={settings.coordinateFormat}
-                onValueChange={(v) => update({ coordinateFormat: v as AppSettings["coordinateFormat"] })}
-              >
-                <SelectTrigger className="w-28 h-7 text-[11px] bg-secondary/50 border-border/60">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-card border-border">
-                  <SelectItem value="decimal" className="text-xs">Decimal</SelectItem>
-                  <SelectItem value="dms" className="text-xs">DMS</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </section>
-
-          <Separator className="bg-border/40" />
-
-          {/* Transport Mode */}
-          <section className="space-y-3">
+          {/* ── SIMULATION ── */}
+          <section className="space-y-4">
             <h3 className="flex items-center gap-2 text-[11px] font-semibold text-primary uppercase tracking-wider">
               <Route className="h-3.5 w-3.5" />
-              Route Simulation
+              Simulation
             </h3>
+
+            {/* Transport Mode */}
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Transport mode</Label>
+              <Label className="text-xs text-muted-foreground">Transport Mode</Label>
               <div className="grid grid-cols-3 gap-1.5">
                 {(Object.keys(TRANSPORT_SPEEDS) as TransportMode[]).map((mode) => {
-                  const { label, icon, speed } = TRANSPORT_SPEEDS[mode];
+                  const { label, speed } = TRANSPORT_SPEEDS[mode];
                   const active = settings.transportMode === mode;
                   const IconComp = mode === "walk" ? Footprints : mode === "bike" ? Bike : Car;
                   return (
@@ -120,7 +126,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                       onClick={() => update({ transportMode: mode })}
                       className={`flex flex-col items-center gap-1 rounded-lg px-2 py-2.5 text-center transition-all ${
                         active
-                          ? "bg-primary/15 border border-primary/40 text-primary glow-sm"
+                          ? "bg-primary/15 border border-primary/40 text-primary"
                           : "bg-secondary/40 border border-border/40 text-muted-foreground hover:bg-secondary/60"
                       }`}
                     >
@@ -131,15 +137,66 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
                   );
                 })}
               </div>
-              <p className="text-[10px] text-muted-foreground/70 leading-relaxed">
-                The marker moves at a realistic pace based on the distance between waypoints.
-              </p>
             </div>
+
+            {/* Movement Mode */}
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Movement Mode</Label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {(Object.keys(SIMULATION_MODES) as SimulationMode[]).map((mode) => {
+                  const { label, description } = SIMULATION_MODES[mode];
+                  const active = settings.simulationMode === mode;
+                  const IconComp = mode === "smooth" ? Waves : Timer;
+                  return (
+                    <button
+                      key={mode}
+                      onClick={() => update({ simulationMode: mode })}
+                      className={`flex flex-col items-start gap-1.5 rounded-lg px-3 py-2.5 text-left transition-all ${
+                        active
+                          ? "bg-primary/15 border border-primary/40 text-primary"
+                          : "bg-secondary/40 border border-border/40 text-muted-foreground hover:bg-secondary/60"
+                      }`}
+                    >
+                      <IconComp className="h-3.5 w-3.5" />
+                      <div>
+                        <div className="text-[11px] font-medium leading-tight">{label}</div>
+                        <div className={`text-[9px] leading-tight mt-0.5 ${active ? "text-primary/70" : "text-muted-foreground/70"}`}>
+                          {description}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Interval selector — only shown for interval mode */}
+            {settings.simulationMode === "interval" && (
+              <div className="flex items-center justify-between animate-fade-in">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Teleport Interval</Label>
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">How often to jump to the next position</p>
+                </div>
+                <Select
+                  value={String(settings.intervalSeconds)}
+                  onValueChange={(v) => update({ intervalSeconds: parseInt(v) as 3 | 5 | 10 })}
+                >
+                  <SelectTrigger className="w-16 h-7 text-[11px] bg-secondary/50 border-border/60">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    <SelectItem value="3" className="text-xs">3s</SelectItem>
+                    <SelectItem value="5" className="text-xs">5s</SelectItem>
+                    <SelectItem value="10" className="text-xs">10s</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </section>
 
           <Separator className="bg-border/40" />
 
-          {/* History */}
+          {/* ── HISTORY ── */}
           <section className="space-y-3">
             <h3 className="flex items-center gap-2 text-[11px] font-semibold text-primary uppercase tracking-wider">
               <Bookmark className="h-3.5 w-3.5" />
@@ -174,21 +231,18 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
 
           <Separator className="bg-border/40" />
 
-          {/* Dangerous Section */}
+          {/* ── ADVANCED ── */}
           <section className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
             <h3 className="flex items-center gap-2 text-[11px] font-semibold text-destructive uppercase tracking-wider">
               <ShieldAlert className="h-3.5 w-3.5" />
               Advanced
             </h3>
-
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <Wifi className="h-3 w-3" />
-                    Tunnel Mode
-                  </Label>
-                </div>
+                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Wifi className="h-3 w-3" />
+                  Tunnel Mode
+                </Label>
                 <Select
                   value={settings.tunnelMode}
                   onValueChange={(v) => setPendingTunnel(v as TunnelMode)}
@@ -207,7 +261,7 @@ export function SettingsPanel({ open, onOpenChange }: SettingsPanelProps) {
               </div>
               <p className="text-[10px] text-muted-foreground/70 leading-relaxed">
                 Controls how geoghost connects to your device for location spoofing on iOS 17+.
-                Changing this may break the connection to your device.
+                Changing this may break the connection.
               </p>
               <p className="text-[10px] text-destructive/70 leading-relaxed">
                 Current: <span className="font-medium text-destructive">{TUNNEL_OPTIONS.find(o => o.value === settings.tunnelMode)?.label}</span> — {TUNNEL_OPTIONS.find(o => o.value === settings.tunnelMode)?.desc}

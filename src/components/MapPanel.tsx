@@ -16,6 +16,7 @@ import { setLocation, resetLocation, checkTunneld, startTunneld, listDevices, se
 import { SudoPasswordDialog } from "@/components/SudoPasswordDialog";
 import { type SavedLocation } from "@/hooks/use-location-storage";
 import { useSettings, TRANSPORT_SPEEDS } from "@/hooks/use-settings";
+
 import {
   type Waypoint,
   haversine,
@@ -71,17 +72,26 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
   const [simulating, setSimulating] = useState(false);
   const [simProgress, setSimProgress] = useState(0);
   const simulationRef = useRef<number | null>(null);
+  const simModeRef = useRef<"raf" | "interval">("raf");
   const gpxInputRef = useRef<HTMLInputElement>(null);
   const [undoStack, setUndoStack] = useState<Waypoint[][]>([]);
   const [deviceList, setDeviceList] = useState<DeviceInfo[]>([]);
   const [selectedUdid, setSelectedUdid] = useState<string | null>(null);
+  const [switchedDeviceName, setSwitchedDeviceName] = useState<string | null>(null);
   const connected = deviceStatus?.connected ?? false;
   const devMode = deviceStatus?.developerMode ?? false;
   const canSpoof = connected && devMode;
 
   const profile = transportToProfile(settings.transportMode);
 
-  // Init map
+  // Clear switchedDeviceName once deviceStatus catches up
+  useEffect(() => {
+    if (switchedDeviceName && deviceStatus?.name === switchedDeviceName) {
+      setSwitchedDeviceName(null);
+    }
+  }, [deviceStatus?.name, switchedDeviceName]);
+
+
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
     mapboxgl.accessToken = MAPBOX_TOKEN;
@@ -495,7 +505,11 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
     if (map?.getSource("route-line")) map.removeSource("route-line");
     removePreviewLine();
     if (simulationRef.current) {
-      cancelAnimationFrame(simulationRef.current);
+      if (simModeRef.current === "interval") {
+        clearInterval(simulationRef.current);
+      } else {
+        cancelAnimationFrame(simulationRef.current);
+      }
       simulationRef.current = null;
     }
     setSimulating(false);
@@ -585,7 +599,13 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
 
   const toggleSimulation = useCallback(() => {
     if (simulating) {
-      if (simulationRef.current) cancelAnimationFrame(simulationRef.current);
+      if (simulationRef.current) {
+        if (simModeRef.current === "interval") {
+          clearInterval(simulationRef.current);
+        } else {
+          cancelAnimationFrame(simulationRef.current);
+        }
+      }
       simulationRef.current = null;
       setSimulating(false);
       return;
@@ -614,9 +634,6 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
       }
     }
 
-    let stepIdx = 0;
-    let lastTime = performance.now();
-
     // Ensure tunneld is running before starting simulation
     (async () => {
       const tunnelReady = await ensureTunneld();
@@ -625,13 +642,25 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
       setSimulating(true);
       setSimProgress(0);
 
-      const animate = (now: number) => {
-        if (now - lastTime >= TICK_MS) {
-          lastTime = now;
-          if (stepIdx >= steps.length) {
+      if (settings.simulationMode === "interval") {
+        // ── Interval mode: teleport every N seconds ──
+        simModeRef.current = "interval";
+        const totalSteps = steps.length;
+        const totalDistKm = routePoints.reduce((acc, _, i) => {
+          if (i === 0) return acc;
+          return acc + haversine(routePoints[i - 1], routePoints[i]);
+        }, 0);
+        const totalTimeS = (totalDistKm / speedKmh) * 3600;
+        const stepsPerTick = Math.max(1, Math.round(totalSteps / (totalTimeS / settings.intervalSeconds)));
+
+        let stepIdx = 0;
+
+        const tick = () => {
+          if (stepIdx >= totalSteps) {
+            clearInterval(simulationRef.current!);
+            simulationRef.current = null;
             setSimulating(false);
             setSimProgress(100);
-            simulationRef.current = null;
             toast.success("Route simulation complete");
             return;
           }
@@ -643,15 +672,46 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
           setCoords(rounded);
           markerRef.current?.setLngLat([rounded.lng, rounded.lat]);
           setLocation(rounded.lat, rounded.lng).catch(() => {});
-          stepIdx++;
-          setSimProgress(Math.round((stepIdx / steps.length) * 100));
-        }
-        simulationRef.current = requestAnimationFrame(animate);
-      };
+          stepIdx = Math.min(stepIdx + stepsPerTick, totalSteps);
+          setSimProgress(Math.round((stepIdx / totalSteps) * 100));
+        };
 
-      simulationRef.current = requestAnimationFrame(animate);
+        tick(); // fire immediately on start
+        simulationRef.current = window.setInterval(tick, settings.intervalSeconds * 1000) as unknown as number;
+      } else {
+        // ── Smooth mode: requestAnimationFrame loop ──
+        simModeRef.current = "raf";
+        let stepIdx = 0;
+        let lastTime = performance.now();
+
+        const animate = (now: number) => {
+          if (now - lastTime >= TICK_MS) {
+            lastTime = now;
+            if (stepIdx >= steps.length) {
+              setSimulating(false);
+              setSimProgress(100);
+              simulationRef.current = null;
+              toast.success("Route simulation complete");
+              return;
+            }
+            const step = steps[stepIdx];
+            const rounded = {
+              lat: parseFloat(step.lat.toFixed(6)),
+              lng: parseFloat(step.lng.toFixed(6)),
+            };
+            setCoords(rounded);
+            markerRef.current?.setLngLat([rounded.lng, rounded.lat]);
+            setLocation(rounded.lat, rounded.lng).catch(() => {});
+            stepIdx++;
+            setSimProgress(Math.round((stepIdx / steps.length) * 100));
+          }
+          simulationRef.current = requestAnimationFrame(animate);
+        };
+
+        simulationRef.current = requestAnimationFrame(animate);
+      }
     })();
-  }, [simulating, snappedRoute, waypoints, connected, canSpoof, settings.transportMode, ensureTunneld]);
+  }, [simulating, snappedRoute, waypoints, connected, canSpoof, settings.transportMode, settings.simulationMode, settings.intervalSeconds, ensureTunneld]);
 
   // Route stats
   const routePoints = snappedRoute.length >= 2 ? snappedRoute : waypoints;
@@ -672,7 +732,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
           <PopoverTrigger asChild>
             <button className="flex items-center gap-2 rounded-full bg-secondary/60 px-3 py-1.5 text-xs transition-all hover:bg-secondary/80 shrink-0">
               <span className={`h-2 w-2 rounded-full ${connected ? "bg-primary shadow-[0_0_6px_hsl(145,72%,46%)]" : "bg-destructive shadow-[0_0_6px_hsl(0,68%,52%)]"}`} />
-              <span className="text-foreground font-medium">{connected ? deviceStatus?.name : "No Device"}</span>
+            <span className="text-foreground font-medium">{connected ? (switchedDeviceName ?? deviceStatus?.name) : "No Device"}</span>
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-72 p-3 bg-popover z-50" align="start">
@@ -708,6 +768,7 @@ export function MapPanel({ deviceStatus, favorites, recents, onAddFavorite, onRe
                             key={d.udid}
                             onClick={async () => {
                               setSelectedUdid(d.udid);
+                              setSwitchedDeviceName(d.name);
                               await selectDevice(d.udid);
                               onRefreshDevice();
                               toast.success(`Switched to ${d.name}`);

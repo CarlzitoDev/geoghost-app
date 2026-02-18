@@ -2,15 +2,31 @@ import { useState, useCallback, useSyncExternalStore } from "react";
 
 export type TransportMode = "walk" | "bike" | "drive";
 export type TunnelMode = "auto" | "quic" | "sudo";
+export type SimulationMode = "smooth" | "interval";
 
 export interface AppSettings {
   mapStyle: "dark" | "satellite" | "streets";
   coordinateFormat: "decimal" | "dms";
   transportMode: TransportMode;
+  simulationMode: SimulationMode;
+  intervalSeconds: 3 | 5 | 10;
   autoSaveRecents: boolean;
   maxRecents: number;
   tunnelMode: TunnelMode;
 }
+
+export const SIMULATION_MODES: Record<SimulationMode, { label: string; description: string; icon: string }> = {
+  smooth: {
+    label: "Smooth",
+    description: "Marker glides continuously at realistic speed",
+    icon: "wave",
+  },
+  interval: {
+    label: "Interval",
+    description: "Teleports to next position every few seconds",
+    icon: "timer",
+  },
+};
 
 /** Speeds in km/h */
 export const TRANSPORT_SPEEDS: Record<TransportMode, { speed: number; label: string; icon: string }> = {
@@ -25,6 +41,8 @@ const defaultSettings: AppSettings = {
   mapStyle: "dark",
   coordinateFormat: "decimal",
   transportMode: "walk",
+  simulationMode: "smooth",
+  intervalSeconds: 5,
   autoSaveRecents: true,
   maxRecents: 10,
   tunnelMode: "auto",
